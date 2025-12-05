@@ -4,6 +4,11 @@ export async function POST(request: NextRequest) {
   try {
     const { code } = await request.json();
 
+    // Get the current host dynamically
+    const host = request.headers.get('host');
+    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+    const baseUrl = `${protocol}://${host}`;
+
     if (!code) {
       return NextResponse.json(
         { error: 'Authorization code is required' },
@@ -23,9 +28,7 @@ export async function POST(request: NextRequest) {
         grant_type: 'authorization_code',
         client_id: process.env.KAKAO_REST_API_KEY!,
         code,
-        redirect_uri: `${process.env.NODE_ENV === 'production'
-          ? 'https://kyareureuk-party-3zm2q3e8r-dongeun-kims-projects-f8739078.vercel.app'
-          : 'http://localhost:3000'}/api/auth/kakao/callback`
+        redirect_uri: `${baseUrl}/api/auth/kakao/callback`
       }),
     });
 
@@ -43,9 +46,7 @@ export async function POST(request: NextRequest) {
           details: tokenData,
           debug: {
             client_id: process.env.KAKAO_REST_API_KEY,
-            redirect_uri: `${process.env.NODE_ENV === 'production'
-              ? 'https://kyareureuk-party-3zm2q3e8r-dongeun-kims-projects-f8739078.vercel.app'
-              : 'http://localhost:3000'}/api/auth/kakao/callback`
+            redirect_uri: `${baseUrl}/api/auth/kakao/callback`
           }
         },
         { status: 400 }

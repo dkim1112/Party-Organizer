@@ -75,6 +75,43 @@ export default function PaymentPage() {
       // Always succeed for development
       const paymentId = `mock_payment_${Date.now()}`;
 
+      console.log('💳 Mock payment completed:', {
+        paymentId,
+        amount: paymentInfo.amount,
+        userData: userData.name
+      });
+
+      // Create user and registration after successful payment
+      const { createUser, createRegistration, getCurrentEvent } = await import('@/lib/firestore');
+
+      console.log('👤 Creating user in Firestore...');
+      const userId = await createUser({
+        kakaoId: userData.kakaoId,
+        name: userData.name,
+        phoneNumber: userData.phoneNumber,
+        gender: userData.gender as 'male' | 'female',
+        age: parseInt(userData.age)
+      });
+
+      console.log('✅ User created with ID:', userId);
+
+      // Get current event for registration
+      const currentEvent = await getCurrentEvent();
+      if (!currentEvent) {
+        throw new Error('활성 이벤트를 찾을 수 없습니다');
+      }
+
+      console.log('📅 Creating registration...');
+      await createRegistration({
+        userId,
+        eventId: currentEvent.id,
+        paymentStatus: 'completed',
+        paymentId,
+        questionnaireAnswers: {} // Empty for now
+      });
+
+      console.log('✅ Registration created successfully');
+
       // Store payment success info
       sessionStorage.setItem('paymentResult', JSON.stringify({
         success: true,
@@ -82,12 +119,6 @@ export default function PaymentPage() {
         amount: paymentInfo.amount,
         userData
       }));
-
-      console.log('💳 Mock payment completed:', {
-        paymentId,
-        amount: paymentInfo.amount,
-        userData: userData.name
-      });
 
       router.push('/dashboard');
     } catch (err: any) {

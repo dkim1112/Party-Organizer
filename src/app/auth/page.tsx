@@ -127,20 +127,7 @@ function AuthPageContent() {
     setError('');
 
     try {
-      console.log('👤 Creating user with Kakao data...');
-
-      // Create user directly in Firestore
-      const { createUser } = await import('@/lib/firestore');
-
-      const userId = await createUser({
-        kakaoId: userData.kakaoId!,
-        name: userData.name,
-        phoneNumber: userData.phoneNumber,
-        gender: userData.gender as 'male' | 'female',
-        age: parseInt(userData.age)
-      });
-
-      console.log('✅ User created in Firestore with ID:', userId);
+      console.log('👤 Saving user data for payment...');
 
       // Store user data in sessionStorage for payment page
       sessionStorage.setItem('pendingUser', JSON.stringify({
@@ -150,6 +137,8 @@ function AuthPageContent() {
         gender: userData.gender,
         age: userData.age
       }));
+
+      console.log('✅ User data saved to sessionStorage');
 
       // Redirect to payment page
       router.push('/payment');
