@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
-import { getCurrentEvent, getUserByKakaoId, createRegistration, cancelRegistration } from '@/lib/firestore';
+import { getCurrentEvent, getUserByKakaoId, cancelRegistration } from '@/lib/firestore';
 
 interface UserInfo {
   name: string;
@@ -36,47 +36,6 @@ export default function DashboardPage() {
   });
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  // 사용자 등록 생성 함수
-  const createUserRegistration = async (userData: any, paymentId: string) => {
-    try {
-      console.log('🚀 Creating user registration...', userData);
-
-      // 현재 이벤트 가져오기
-      const currentEvent = await getCurrentEvent();
-      if (!currentEvent) {
-        throw new Error('활성 이벤트를 찾을 수 없습니다');
-      }
-
-      console.log('📅 Current event found:', currentEvent.id);
-
-      // 사용자 정보 가져오기 - Auth에서 이미 생성된 사용자 검색
-      console.log('🔍 Searching for user with Kakao ID:', userData.kakaoId);
-      const user = await getUserByKakaoId(userData.kakaoId);
-
-      if (!user) {
-        console.error('❌ User not found in Firestore. Auth 페이지에서 사용자 생성이 실패했을 수 있습니다.');
-        throw new Error('사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.');
-      }
-
-      console.log('✅ User found:', user);
-
-      // 등록 생성
-      console.log('📝 Creating registration with userId:', user.id);
-      const registrationId = await createRegistration({
-        userId: user.id,
-        eventId: currentEvent.id,
-        paymentStatus: 'completed',
-        paymentId: paymentId,
-        questionnaireAnswers: {}
-      });
-
-      console.log('✅ Registration created successfully:', registrationId);
-      return registrationId;
-    } catch (error) {
-      console.error('❌ Error creating registration:', error);
-      throw error;
-    }
-  };
 
   useEffect(() => {
     const uniqueId = Math.random().toString(36).substr(2, 9);
@@ -106,33 +65,8 @@ export default function DashboardPage() {
             userData = paymentResult.userData;
             paymentStatus = 'completed';
 
-            // 결제 완료 시 등록 생성 (한 번만)
-            const registrationKey = `registration_created_${userData.kakaoId}`;
-            const alreadyCreated = localStorage.getItem(registrationKey);
-
-            console.log(`🔄 Registration check [${uniqueId}]:`);
-            console.log('- registrationKey:', registrationKey);
-            console.log('- alreadyCreated:', alreadyCreated);
-
-            if (!alreadyCreated) {
-              console.log(`🚀 Starting createUserRegistration... [${uniqueId}]`);
-
-              // Double-check right before creating registration
-              const doubleCheck = localStorage.getItem(registrationKey);
-              if (doubleCheck) {
-                console.log(`⚠️ Registration already created during execution [${uniqueId}], skipping...`);
-                return;
-              }
-
-              // Set flag immediately to prevent race conditions
-              localStorage.setItem(registrationKey, 'true');
-              console.log(`🔒 Registration flag set [${uniqueId}]`);
-
-              await createUserRegistration(userData, paymentResult.paymentId);
-              console.log(`✅ Registration creation completed [${uniqueId}]`);
-            } else {
-              console.log(`⏭️ Registration already exists, skipping... [${uniqueId}]`);
-            }
+            // Registration is now created by payment page, no need to create here
+            console.log(`✅ Payment completed, user and registration already created by payment page [${uniqueId}]`);
           } else {
             console.log('❌ Payment was not successful');
           }
