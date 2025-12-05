@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
         client_id: process.env.KAKAO_REST_API_KEY!,
         code,
         redirect_uri: `${process.env.NODE_ENV === 'production'
-          ? 'https://kyareureuk-party-ju7qi5g9o-dongeun-kims-projects-f8739078.vercel.app'
+          ? 'https://kyareureuk-party-3zm2q3e8r-dongeun-kims-projects-f8739078.vercel.app'
           : 'http://localhost:3000'}/api/auth/kakao/callback`
       }),
     });
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
           debug: {
             client_id: process.env.KAKAO_REST_API_KEY,
             redirect_uri: `${process.env.NODE_ENV === 'production'
-              ? 'https://kyareureuk-party-ju7qi5g9o-dongeun-kims-projects-f8739078.vercel.app'
+              ? 'https://kyareureuk-party-3zm2q3e8r-dongeun-kims-projects-f8739078.vercel.app'
               : 'http://localhost:3000'}/api/auth/kakao/callback`
           }
         },
