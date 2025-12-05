@@ -5,27 +5,20 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const error = searchParams.get('error');
 
+  // Get the current host dynamically
+  const host = request.headers.get('host');
+  const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+  const baseUrl = `${protocol}://${host}`;
+
   if (error) {
     console.error('❌ Kakao authentication error:', error);
-    return NextResponse.redirect(
-      `${process.env.NODE_ENV === 'production'
-        ? 'https://kyareureuk-party-ju7qi5g9o-dongeun-kims-projects-f8739078.vercel.app'
-        : 'http://localhost:3000'}/auth?error=kakao_auth_failed`
-    );
+    return NextResponse.redirect(`${baseUrl}/auth?error=kakao_auth_failed`);
   }
 
   if (!code) {
-    return NextResponse.redirect(
-      `${process.env.NODE_ENV === 'production'
-        ? 'https://kyareureuk-party-ju7qi5g9o-dongeun-kims-projects-f8739078.vercel.app'
-        : 'http://localhost:3000'}/auth?error=no_code`
-    );
+    return NextResponse.redirect(`${baseUrl}/auth?error=no_code`);
   }
 
   // Redirect back to auth page with the code
-  return NextResponse.redirect(
-    `${process.env.NODE_ENV === 'production'
-      ? 'https://kyareureuk-party-ju7qi5g9o-dongeun-kims-projects-f8739078.vercel.app'
-      : 'http://localhost:3000'}/auth?code=${code}`
-  );
+  return NextResponse.redirect(`${baseUrl}/auth?code=${code}`);
 }
