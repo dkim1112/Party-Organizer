@@ -1,0 +1,82 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users collection
+    match /users/{userId} {
+      // Users can read their own data by phone number
+      allow read: if request.auth != null
+                  && (request.auth.uid == userId ||
+                      request.auth.token.phone_number == resource.data.phoneNumber);
+
+      // Users can create their profile after phone authentication
+      allow create: if request.auth != null
+                    && request.auth.token.phone_number != null
+                    && request.resource.data.phoneNumber == request.auth.token.phone_number;
+
+      // Users can update their own profile by phone number
+      allow update: if request.auth != null
+                    && request.auth.token.phone_number != null
+                    && resource.data.phoneNumber == request.auth.token.phone_number;
+
+      // Admin can read all (for analytics)
+      allow read: if isAdmin();
+    }
+
+    // Events collection
+    match /events/{eventId} {
+      // Anyone can read current/open events
+      allow read: if resource.data.status in ['open', 'full'];
+
+      // Only admin can create/update events
+      allow create, update: if isAdmin();
+
+      // No delete allowed
+      allow delete: if false;
+    }
+
+    // Registrations collection
+    match /registrations/{registrationId} {
+      // Users can read their own registrations
+      allow read: if request.auth != null
+                  && request.auth.token.phone_number != null;
+
+      // Users can create their own registrations
+      allow create: if request.auth != null
+                    && request.auth.token.phone_number != null
+                    && isValidRegistration();
+
+      // Users can update payment status of their own registrations
+      allow update: if request.auth != null
+                    && request.auth.token.phone_number != null
+                    && onlyUpdatingPaymentStatus();
+
+      // Admin can read all registrations
+      allow read: if isAdmin();
+
+      // Admin can update registrations
+      allow update: if isAdmin();
+    }
+
+    // Helper functions
+    function isAdmin() {
+      // Replace with actual admin email or custom claims
+      return request.auth != null &&
+             (request.auth.token.email in ['admin@kyareureuk.com'] ||
+              request.auth.token.admin == true);
+    }
+
+    function isValidRegistration() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['userId', 'eventId', 'paymentStatus', 'questionnaireAnswers']) &&
+             data.paymentStatus in ['pending', 'completed', 'failed'] &&
+             data.questionnaireAnswers is map;
+    }
+
+    function onlyUpdatingPaymentStatus() {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return affectedKeys.hasOnly(['paymentStatus', 'paymentId', 'updatedAt']);
+    }
+  }
+}
