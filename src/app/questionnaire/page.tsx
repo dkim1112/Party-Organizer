@@ -113,7 +113,10 @@ export default function QuestionnairePage() {
 
   const validateAnswers = (): boolean => {
     for (const question of questions) {
-      if (question.required && !answers[question.id]?.trim()) {
+      const answer = answers[question.id];
+      const hasValidAnswer = typeof answer === 'string' && answer.trim();
+
+      if (question.required && !hasValidAnswer) {
         setError(`질문 ${question.order}번에 답변해주세요.`);
         return false;
       }
@@ -181,9 +184,10 @@ export default function QuestionnairePage() {
     router.back();
   };
 
-  const answeredCount = Object.keys(answers).filter((key) =>
-    answers[key]?.trim()
-  ).length;
+  const answeredCount = Object.keys(answers).filter((key) => {
+    const answer = answers[key];
+    return typeof answer === 'string' && answer.trim();
+  }).length;
   const progressPercentage =
     questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
 

@@ -15,7 +15,7 @@ import {
   increment,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { User, Event, Registration, EventStatus, MenuItem } from "@/types";
+import { User, Event, Registration, EventStatus, MenuItem, Question, QuestionnaireAnswers } from "@/types";
 
 // Collections
 const USERS_COLLECTION = "users";

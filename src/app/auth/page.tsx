@@ -363,7 +363,7 @@ function AuthPageContent() {
                         value="male"
                         id="male"
                         disabled={
-                          genderAvailability && !genderAvailability.male
+                          Boolean(genderAvailability && !genderAvailability.male)
                         }
                       />
                       <Label
@@ -385,7 +385,7 @@ function AuthPageContent() {
                         value="female"
                         id="female"
                         disabled={
-                          genderAvailability && !genderAvailability.female
+                          Boolean(genderAvailability && !genderAvailability.female)
                         }
                       />
                       <Label
