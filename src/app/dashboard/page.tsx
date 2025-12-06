@@ -56,18 +56,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const uniqueId = Math.random().toString(36).substr(2, 9);
-    console.log(`🔄 Dashboard useEffect started [${uniqueId}]`);
 
     // Load user data and event data
     const loadData = async () => {
       try {
-        console.log(`📊 Loading data... [${uniqueId}]`);
-
         // Load user data from session storage
         const paymentResultData = sessionStorage.getItem("paymentResult");
         const pendingUserData = sessionStorage.getItem("pendingUser");
-
-        console.log(`💾 SessionStorage check [${uniqueId}]:`);
         console.log(
           "- paymentResult:",
           paymentResultData ? "EXISTS" : "MISSING"
@@ -78,19 +73,11 @@ export default function DashboardPage() {
         let paymentStatus = "pending";
 
         if (paymentResultData) {
-          console.log("🔍 Parsing paymentResult...");
           const paymentResult = JSON.parse(paymentResultData);
-          console.log("📄 PaymentResult content:", paymentResult);
 
           if (paymentResult.success) {
-            console.log("✅ Payment was successful");
             userData = paymentResult.userData;
             paymentStatus = "completed";
-
-            // Registration is now created by payment page, no need to create here
-            console.log(
-              `✅ Payment completed, user and registration already created by payment page [${uniqueId}]`
-            );
           } else {
             console.log("❌ Payment was not successful");
           }
@@ -110,11 +97,9 @@ export default function DashboardPage() {
         }
 
         // Load event data from Firestore
-        console.log(`📅 Loading current event... [${uniqueId}]`);
         const currentEvent = await getCurrentEvent();
 
         if (currentEvent) {
-          console.log("✅ Current event found:", currentEvent);
           setCurrentEventId(currentEvent.id);
 
           // Convert Firestore timestamp to readable date
@@ -133,15 +118,9 @@ export default function DashboardPage() {
             location: currentEvent.location || "장소 미정",
             mcName: currentEvent.mcName || "MC 미정",
             description: currentEvent.description || "이벤트 설명이 없습니다.",
-            rules: currentEvent.rules || [
-              "상대방을 존중하며 예의를 지켜주세요",
-              "개인정보는 서로 동의 하에 공유해주세요",
-              "과도한 음주는 자제해주세요",
-              "휴대폰 사용은 최소화해주세요",
-            ],
+            rules: currentEvent.rules || ["설정된 규칙이 아직 없습니다."],
           });
         } else {
-          console.log("❌ No current event found");
           // Set default event info if no event is found
           setEventInfo({
             date: "이벤트 날짜 미정",
@@ -149,27 +128,16 @@ export default function DashboardPage() {
             location: "장소 미정",
             mcName: "MC 미정",
             description: "현재 활성화된 이벤트가 없습니다.",
-            rules: [
-              "상대방을 존중하며 예의를 지켜주세요",
-              "개인정보는 서로 동의 하에 공유해주세요",
-              "과도한 음주는 자제해주세요",
-              "휴대폰 사용은 최소화해주세요",
-            ],
+            rules: ["설정된 규칙이 아직 없습니다."],
           });
         }
 
         // Load menu items from Firestore
-        console.log(`🍽️ Loading menu items... [${uniqueId}]`);
         const menuData = await getMenuItems();
         setMenuItems(menuData);
-        console.log(
-          `✅ Menu items loaded: ${menuData.length} items [${uniqueId}]`
-        );
 
         // Check questionnaire status if we have user and event data
         if (userData && userData.kakaoId && currentEvent) {
-          console.log(`📋 Checking questionnaire status... [${uniqueId}]`);
-
           // Get user from database to get their ID
           const user = await getUserByKakaoId(userData.kakaoId);
           if (user) {
@@ -181,12 +149,6 @@ export default function DashboardPage() {
               currentEvent.id
             );
             setHasQuestionnaireAnswers(existingAnswers !== null);
-
-            console.log(
-              `${existingAnswers ? "✅" : "❌"} Questionnaire status: ${
-                existingAnswers ? "completed" : "not completed"
-              } [${uniqueId}]`
-            );
           }
         }
       } catch (error) {
@@ -211,8 +173,6 @@ export default function DashboardPage() {
     ) {
       setIsLoading(true);
       try {
-        console.log("🚫 Starting cancellation process...");
-
         // Get current user data from session storage
         const pendingUserData = sessionStorage.getItem("pendingUser");
         const paymentResultData = sessionStorage.getItem("paymentResult");
@@ -254,11 +214,10 @@ export default function DashboardPage() {
         localStorage.clear();
 
         alert(
-          "참가가 취소 되었습니다. 환불 문의는 별도로 DM: yeonrim_bar로 보내주세요."
+          "참가가 취소 되었습니다. 환불 문의는 DM: yeonrim_bar로 진행 해주세요."
         );
         router.push("/");
       } catch (error: any) {
-        console.error("❌ Error cancelling registration:", error);
         alert(`취소 처리 중 오류가 발생했습니다: ${error.message}`);
       } finally {
         setIsLoading(false);

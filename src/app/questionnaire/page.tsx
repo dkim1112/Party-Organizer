@@ -37,8 +37,7 @@ export default function QuestionnairePage() {
   useEffect(() => {
     const initializePage = async () => {
       checkViewMode();
-      // Wait a bit for state to update
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
       await loadQuestions();
     };
 
@@ -60,16 +59,12 @@ export default function QuestionnairePage() {
 
   const loadQuestions = async () => {
     try {
-      console.log("📋 Loading questionnaire questions...");
-      console.log("🔍 Current state:", { isViewMode, currentUserId, currentEventId });
-
       const questionsData = await getQuestions();
 
       if (questionsData.length === 0) {
         setError("질문지가 아직 준비되지 않았습니다.");
       } else {
         setQuestions(questionsData);
-        console.log(`✅ Loaded ${questionsData.length} questions`);
 
         // Check for view mode parameters from URL directly
         const urlParams = new URLSearchParams(window.location.search);
@@ -77,27 +72,21 @@ export default function QuestionnairePage() {
         const userIdParam = urlParams.get("userId");
         const eventIdParam = urlParams.get("eventId");
 
-        console.log("🔍 URL params:", { isViewModeParam, userIdParam, eventIdParam });
-
         // If in view mode, load existing answers
         if (isViewModeParam && userIdParam && eventIdParam) {
-          console.log("👀 Loading existing answers for view mode...");
-          const existingAnswers = await getQuestionnaireAnswers(userIdParam, eventIdParam);
-          console.log("🔍 Existing answers result:", existingAnswers);
+          const existingAnswers = await getQuestionnaireAnswers(
+            userIdParam,
+            eventIdParam
+          );
 
           if (existingAnswers) {
             setAnswers(existingAnswers);
-            console.log("✅ Loaded existing answers:", Object.keys(existingAnswers).length, "answers");
           } else {
-            console.log("❌ No existing answers found");
             setError("저장된 답변을 찾을 수 없습니다.");
           }
-        } else {
-          console.log("📝 Not in view mode, ready for new answers");
         }
       }
     } catch (error) {
-      console.error("Failed to load questions:", error);
       setError("질문지를 불러오는데 실패했습니다.");
     } finally {
       setIsLoading(false);
@@ -114,7 +103,7 @@ export default function QuestionnairePage() {
   const validateAnswers = (): boolean => {
     for (const question of questions) {
       const answer = answers[question.id];
-      const hasValidAnswer = typeof answer === 'string' && answer.trim();
+      const hasValidAnswer = typeof answer === "string" && answer.trim();
 
       if (question.required && !hasValidAnswer) {
         setError(`질문 ${question.order}번에 답변해주세요.`);
@@ -134,8 +123,6 @@ export default function QuestionnairePage() {
     setIsSubmitting(true);
 
     try {
-      console.log("💾 Saving questionnaire answers:", answers);
-
       // Get current user and event info
       const paymentResultData = sessionStorage.getItem("paymentResult");
       const pendingUserData = sessionStorage.getItem("pendingUser");
@@ -173,7 +160,6 @@ export default function QuestionnairePage() {
       alert("질문지 작성이 완료되었습니다! 감사합니다 💕");
       router.push("/dashboard");
     } catch (error: any) {
-      console.error("Failed to save answers:", error);
       setError(`답변 저장에 실패했습니다: ${error.message}`);
     } finally {
       setIsSubmitting(false);
@@ -186,7 +172,7 @@ export default function QuestionnairePage() {
 
   const answeredCount = Object.keys(answers).filter((key) => {
     const answer = answers[key];
-    return typeof answer === 'string' && answer.trim();
+    return typeof answer === "string" && answer.trim();
   }).length;
   const progressPercentage =
     questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
@@ -216,7 +202,7 @@ export default function QuestionnairePage() {
 
   return (
     <AppLayout
-      title={isViewMode ? "💕 내 설문 보기" : "💕 사전 질문지"}
+      title={isViewMode ? "💕 내 답변 보기" : "💕 사전 질문지"}
       showBackButton
       onBack={handleGoBack}
     >

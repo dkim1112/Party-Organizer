@@ -15,7 +15,15 @@ import {
   increment,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { User, Event, Registration, EventStatus, MenuItem, Question, QuestionnaireAnswers } from "@/types";
+import {
+  User,
+  Event,
+  Registration,
+  EventStatus,
+  MenuItem,
+  Question,
+  QuestionnaireAnswers,
+} from "@/types";
 
 // Collections
 const USERS_COLLECTION = "users";
@@ -31,7 +39,6 @@ export const createUser = async (
     if (userData.kakaoId) {
       const existingUser = await getUserByKakaoId(userData.kakaoId);
       if (existingUser) {
-        console.log("User already exists with Kakao ID:", userData.kakaoId);
         return existingUser.id;
       }
     }
@@ -43,7 +50,6 @@ export const createUser = async (
     });
     return userDoc.id;
   } catch (error) {
-    console.error("Error creating user:", error);
     throw error;
   }
 };
@@ -52,7 +58,6 @@ export const getUserByKakaoId = async (
   kakaoId: string
 ): Promise<User | null> => {
   try {
-    console.log(`🔍 Searching for user with Kakao ID: ${kakaoId}`);
     const q = query(
       collection(db, USERS_COLLECTION),
       where("kakaoId", "==", kakaoId),
@@ -63,12 +68,10 @@ export const getUserByKakaoId = async (
     if (!querySnapshot.empty) {
       const userDoc = querySnapshot.docs[0];
       const user = { id: userDoc.id, ...userDoc.data() } as User;
-      console.log("✅ Found existing user:", user.id);
       return user;
+    } else {
+      return null;
     }
-
-    console.log("❌ No user found with Kakao ID:", kakaoId);
-    return null;
   } catch (error) {
     console.error("Error searching user by Kakao ID:", error);
     return null;
@@ -91,7 +94,6 @@ export const getUserById = async (userId: string): Promise<User | null> => {
 // Event operations
 export const getCurrentEvent = async (): Promise<Event | null> => {
   try {
-    // 더 간단한 쿼리로 변경 - 인덱스 불필요
     const q = query(
       collection(db, EVENTS_COLLECTION),
       where("status", "==", "open"),
@@ -175,8 +177,6 @@ export const createRegistration = async (
   registrationData: Omit<Registration, "id" | "registeredAt" | "updatedAt">
 ) => {
   try {
-    console.log("🚀 Starting createRegistration with data:", registrationData);
-
     // Start a batch write to update both registration and event
     const registrationDoc = await addDoc(
       collection(db, REGISTRATIONS_COLLECTION),
@@ -186,11 +186,7 @@ export const createRegistration = async (
         updatedAt: serverTimestamp(),
       }
     );
-
-    console.log("✅ Registration document created:", registrationDoc.id);
-
     // Update event participant count
-    console.log("📝 Getting user by ID:", registrationData.userId);
     const user = await getUserById(registrationData.userId);
 
     if (!user) {
@@ -198,17 +194,10 @@ export const createRegistration = async (
       throw new Error("사용자 정보를 찾을 수 없습니다");
     }
 
-    console.log("👤 User found:", user);
-
     const eventRef = doc(db, EVENTS_COLLECTION, registrationData.eventId);
     const incrementField = user.gender === "male" ? "maleCount" : "femaleCount";
 
-    console.log(
-      `📊 Will increment ${incrementField} for user gender: ${user.gender}`
-    );
-
     // Get current event data first
-    console.log("📖 Getting current event data...");
     const currentEventDoc = await getDoc(eventRef);
 
     if (!currentEventDoc.exists()) {
@@ -219,28 +208,16 @@ export const createRegistration = async (
     const currentEventData = currentEventDoc.data();
     const currentParticipants = currentEventData?.participants || [];
 
-    console.log("📋 Current event data:", {
-      maleCount: currentEventData?.maleCount || 0,
-      femaleCount: currentEventData?.femaleCount || 0,
-      participants: currentParticipants,
-    });
-
     // Check if user is already in participants to prevent duplicates
     if (currentParticipants.includes(user.id)) {
-      console.log("⚠️ User already in participants list:", user.id);
       return registrationDoc.id;
     }
 
-    console.log("💾 Updating event document...");
     await updateDoc(eventRef, {
       [incrementField]: increment(1),
       participants: [...currentParticipants, user.id],
       updatedAt: serverTimestamp(),
     });
-
-    console.log(
-      `✅ Event updated successfully: ${incrementField} +1, participant ${user.id} added`
-    );
 
     return registrationDoc.id;
   } catch (error) {
@@ -294,10 +271,6 @@ export const updateRegistrationPayment = async (
 // Cancel registration and remove from event
 export const cancelRegistration = async (userId: string, eventId: string) => {
   try {
-    console.log("🚫 Starting registration cancellation...");
-    console.log("- User ID:", userId);
-    console.log("- Event ID:", eventId);
-
     // Get user info first for gender-based count update
     const user = await getUserById(userId);
     if (!user) {
@@ -318,11 +291,9 @@ export const cancelRegistration = async (userId: string, eventId: string) => {
     }
 
     const registrationDoc = registrationSnapshot.docs[0];
-    console.log("📝 Found registration:", registrationDoc.id);
 
     // Delete the registration document
     await deleteDoc(doc(db, REGISTRATIONS_COLLECTION, registrationDoc.id));
-    console.log("✅ Registration deleted");
 
     // Update event counts and participants
     const eventRef = doc(db, EVENTS_COLLECTION, eventId);
@@ -343,11 +314,6 @@ export const cancelRegistration = async (userId: string, eventId: string) => {
     // Determine which count to decrement
     const decrementField = user.gender === "male" ? "maleCount" : "femaleCount";
 
-    console.log(
-      `📊 Will decrement ${decrementField} for user gender: ${user.gender}`
-    );
-    console.log("👥 Removing user from participants list");
-
     // Update event document
     await updateDoc(eventRef, {
       [decrementField]: increment(-1),
@@ -355,10 +321,7 @@ export const cancelRegistration = async (userId: string, eventId: string) => {
       updatedAt: serverTimestamp(),
     });
 
-    console.log("✅ Event updated: participant removed and count decremented");
-
     // Delete questionnaire answers if they exist
-    console.log("🗑️ Looking for questionnaire answers to delete...");
     const questionnaireQuery = query(
       collection(db, "questionnaire_answers"),
       where("userId", "==", userId),
@@ -370,18 +333,10 @@ export const cancelRegistration = async (userId: string, eventId: string) => {
     if (!questionnaireSnapshot.empty) {
       const questionnaireDoc = questionnaireSnapshot.docs[0];
       await deleteDoc(doc(db, "questionnaire_answers", questionnaireDoc.id));
-      console.log("🗑️ Questionnaire answers deleted");
-    } else {
-      console.log("ℹ️ No questionnaire answers found to delete");
     }
-
     // Delete the user document from users collection
     await deleteDoc(doc(db, USERS_COLLECTION, userId));
-    console.log("🗑️ User document deleted from users collection");
-
-    console.log("🎉 Registration cancellation completed successfully");
   } catch (error) {
-    console.error("❌ Error cancelling registration:", error);
     throw error;
   }
 };
@@ -389,17 +344,14 @@ export const cancelRegistration = async (userId: string, eventId: string) => {
 // Menu operations
 export const getMenuItems = async (): Promise<MenuItem[]> => {
   try {
-    const menuQuery = query(
-      collection(db, "menu"),
-      orderBy("name")
-    );
+    const menuQuery = query(collection(db, "menu"), orderBy("name"));
     const querySnapshot = await getDocs(menuQuery);
 
     const menuItems: MenuItem[] = [];
     querySnapshot.forEach((doc) => {
       menuItems.push({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       } as MenuItem);
     });
 
@@ -426,17 +378,14 @@ export const createMenuItem = async (name: string) => {
 // Questionnaire operations
 export const getQuestions = async (): Promise<Question[]> => {
   try {
-    const questionsQuery = query(
-      collection(db, "questions"),
-      orderBy("order")
-    );
+    const questionsQuery = query(collection(db, "questions"), orderBy("order"));
     const querySnapshot = await getDocs(questionsQuery);
 
     const questions: Question[] = [];
     querySnapshot.forEach((doc) => {
       questions.push({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       } as Question);
     });
 
@@ -470,12 +419,12 @@ export const saveQuestionnaireAnswers = async (
     const questions = await getQuestions();
 
     // Structure answers with question details for better organization
-    const structuredAnswers = questions.map(question => ({
+    const structuredAnswers = questions.map((question) => ({
       questionId: question.id,
       order: question.order,
       title: question.title,
       subtitle: question.subtitle,
-      answer: answers[question.id] || ""
+      answer: answers[question.id] || "",
     }));
 
     // Check if answers already exist
@@ -503,7 +452,10 @@ export const saveQuestionnaireAnswers = async (
       return existingSnapshot.docs[0].id;
     } else {
       // Create new answers document
-      const answersDoc = await addDoc(collection(db, "questionnaire_answers"), questionnaireData);
+      const answersDoc = await addDoc(
+        collection(db, "questionnaire_answers"),
+        questionnaireData
+      );
       return answersDoc.id;
     }
   } catch (error) {
@@ -586,7 +538,6 @@ export const getAllQuestionnaireAnswers = async (eventId: string) => {
 
 // Utility function to check bar password
 export const verifyBarPassword = (inputPassword: string): boolean => {
-  const correctPassword =
-    process.env.NEXT_PUBLIC_BAR_PASSWORD || "kyareureuk2024";
+  const correctPassword = process.env.NEXT_PUBLIC_BAR_PASSWORD;
   return inputPassword === correctPassword;
 };

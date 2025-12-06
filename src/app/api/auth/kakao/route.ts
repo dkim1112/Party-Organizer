@@ -1,60 +1,60 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
     const { code } = await request.json();
 
     // Get the current host dynamically
-    const host = request.headers.get('host');
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+    const host = request.headers.get("host");
+    const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
 
     if (!code) {
       return NextResponse.json(
-        { error: 'Authorization code is required' },
+        { error: "Authorization code is required" },
         { status: 400 }
       );
     }
 
-    console.log('🟡 Processing Kakao authentication...');
+    console.log("🟡 Processing Kakao authentication...");
 
     // Step 1: Exchange authorization code for access token
-    const tokenResponse = await fetch('https://kauth.kakao.com/oauth/token', {
-      method: 'POST',
+    const tokenResponse = await fetch("https://kauth.kakao.com/oauth/token", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        grant_type: 'authorization_code',
+        grant_type: "authorization_code",
         client_id: process.env.KAKAO_REST_API_KEY!,
         code,
-        redirect_uri: `${baseUrl}/api/auth/kakao/callback`
+        redirect_uri: `${baseUrl}/api/auth/kakao/callback`,
       }),
     });
 
     const tokenData = await tokenResponse.json();
 
     if (!tokenResponse.ok) {
-      console.error('❌ Kakao token exchange failed:', {
+      console.error({
         status: tokenResponse.status,
         statusText: tokenResponse.statusText,
-        response: tokenData
+        response: tokenData,
       });
       return NextResponse.json(
         {
-          error: 'Failed to exchange authorization code',
+          error: "Failed to exchange authorization code",
           details: tokenData,
           debug: {
             client_id: process.env.KAKAO_REST_API_KEY,
-            redirect_uri: `${baseUrl}/api/auth/kakao/callback`
-          }
+            redirect_uri: `${baseUrl}/api/auth/kakao/callback`,
+          },
         },
         { status: 400 }
       );
     }
 
     // Step 2: Get user information using access token
-    const userResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
+    const userResponse = await fetch("https://kapi.kakao.com/v2/user/me", {
       headers: {
         Authorization: `Bearer ${tokenData.access_token}`,
       },
@@ -63,16 +63,14 @@ export async function POST(request: NextRequest) {
     const userData = await userResponse.json();
 
     if (!userResponse.ok) {
-      console.error('❌ Kakao user info failed:', userData);
       return NextResponse.json(
-        { error: 'Failed to get user information' },
+        { error: "Failed to get user information" },
         { status: 400 }
       );
     }
 
-    console.log('✅ Kakao authentication successful:', {
+    console.log("Kakao authentication successful:", {
       id: userData.id,
-      nickname: userData.kakao_account?.profile?.nickname
     });
 
     // Return user data
@@ -80,14 +78,12 @@ export async function POST(request: NextRequest) {
       success: true,
       user: {
         kakaoId: userData.id,
-        name: userData.kakao_account?.profile?.nickname
-      }
+        name: userData.kakao_account?.profile?.nickname,
+      },
     });
-
   } catch (error: any) {
-    console.error('❌ Kakao authentication error:', error);
     return NextResponse.json(
-      { error: 'Authentication failed', details: error.message },
+      { error: "Authentication failed", details: error.message },
       { status: 500 }
     );
   }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -11,7 +11,7 @@ export default function AppLayout({
   children,
   title,
   showBackButton = false,
-  onBack
+  onBack,
 }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50">
@@ -40,7 +40,7 @@ export default function AppLayout({
           )}
 
           <h1 className="text-xl font-bold text-center flex-1">
-            {title || '꺄르륵 파티 🎉'}
+            {title || "🎉 꺄르륵 파티 🎉"}
           </h1>
 
           {showBackButton && <div className="w-10" />}
@@ -48,9 +48,7 @@ export default function AppLayout({
       </header>
 
       {/* Main Content */}
-      <main className="max-w-md mx-auto px-4 py-6">
-        {children}
-      </main>
+      <main className="max-w-md mx-auto px-4 py-6">{children}</main>
     </div>
   );
 }

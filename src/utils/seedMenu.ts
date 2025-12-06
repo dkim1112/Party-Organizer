@@ -1,18 +1,18 @@
-import { createMenuItem } from '@/lib/firestore';
+import { createMenuItem } from "@/lib/firestore";
 
 const sampleMenuItems = [
-  '생맥주',
-  '소주',
-  '와인',
-  '칵테일',
-  '위스키',
-  '진토닉',
-  '하이볼',
-  '맥주안주',
+  "생맥주",
+  "소주",
+  "와인",
+  "칵테일",
+  "위스키",
+  "진토닉",
+  "하이볼",
+  "맥주안주",
 ];
 
 export const seedMenuItems = async () => {
-  console.log('🍽️ Starting to seed menu items...');
+  console.log("🍽️ Starting to seed menu items...");
 
   const results = [];
 
@@ -26,6 +26,8 @@ export const seedMenuItems = async () => {
     }
   }
 
-  console.log(`🎉 Menu seeding completed: ${results.length}/${sampleMenuItems.length} items created`);
+  console.log(
+    `🎉 Menu seeding completed: ${results.length}/${sampleMenuItems.length} items created`
+  );
   return results;
 };

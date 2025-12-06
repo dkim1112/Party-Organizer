@@ -52,7 +52,6 @@ export default function StatusPage() {
       const isEventPast = eventDate < now;
 
       if (isEventPast) {
-        console.log("⏰ Event date is in the past:", eventDate);
         throw new Error(
           "이벤트가 종료되었습니다. 새로운 이벤트를 기다려 주세요!"
         );
@@ -112,13 +111,6 @@ export default function StatusPage() {
         setAverageAges({
           male: averageMaleAge,
           female: averageFemaleAge,
-        });
-
-        console.log("📊 Average ages calculated:", {
-          male: averageMaleAge,
-          female: averageFemaleAge,
-          maleCount: maleAges.length,
-          femaleCount: femaleAges.length,
         });
 
         // Set event info from Firebase

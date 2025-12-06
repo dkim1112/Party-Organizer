@@ -1,3 +1,5 @@
+// INCOMPLETE!!! (requires toss verification)
+
 "use client";
 
 import { useState, useEffect } from "react";

@@ -67,26 +67,17 @@ function AuthPageContent() {
 
       const currentEvent = await getCurrentEvent();
       if (!currentEvent) {
-        console.log("No current event found");
         return;
       }
 
       const eventStatus = await getEventStatus(currentEvent.id);
       if (!eventStatus) {
-        console.log("No event status found");
         return;
       }
 
       setGenderAvailability({
         male: eventStatus.availableMaleSlots > 0,
         female: eventStatus.availableFemaleSlots > 0,
-      });
-
-      console.log("Gender availability:", {
-        male: eventStatus.availableMaleSlots > 0,
-        female: eventStatus.availableFemaleSlots > 0,
-        maleSlots: eventStatus.availableMaleSlots,
-        femaleSlots: eventStatus.availableFemaleSlots,
       });
     } catch (error) {
       console.error("Error checking gender availability:", error);
@@ -124,14 +115,11 @@ function AuthPageContent() {
         throw new Error(data.error || "카카오 인증에 실패했습니다.");
       }
 
-      console.log("✅ Kakao authentication successful:", data.user);
-
       // Check if user already exists
       const { getUserByKakaoId } = await import("@/lib/firestore");
       const existingUser = await getUserByKakaoId(data.user.kakaoId);
 
       if (existingUser) {
-        console.log("🔍 User already exists:", existingUser.id);
         setError(`${existingUser.name}님, 이미 가입된 계정이에요! 잠시만요..`);
 
         // Store existing user data in sessionStorage for dashboard
@@ -151,10 +139,10 @@ function AuthPageContent() {
           })
         );
 
-        // Redirect to dashboard after 3 seconds
+        // Redirect to dashboard after 2 seconds
         setTimeout(() => {
           router.push("/dashboard");
-        }, 3000);
+        }, 2000);
         return;
       }
 
@@ -170,7 +158,6 @@ function AuthPageContent() {
       // Check gender availability when moving to profile step
       await checkGenderAvailability();
     } catch (err: any) {
-      console.error("❌ Kakao authentication error:", err);
       setError(
         err.message || "카카오 로그인에 실패했습니다. 다시 시도해주세요."
       );
@@ -204,8 +191,6 @@ function AuthPageContent() {
     setError("");
 
     try {
-      console.log("👤 Saving user data for payment...");
-
       // Store user data in sessionStorage for payment page
       sessionStorage.setItem(
         "pendingUser",
@@ -218,12 +203,9 @@ function AuthPageContent() {
         })
       );
 
-      console.log("✅ User data saved to sessionStorage");
-
       // Redirect to payment page
       router.push("/payment");
     } catch (err: any) {
-      console.error("❌ Error creating user:", err);
       setError(err.message || "회원가입에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setIsLoading(false);
@@ -362,9 +344,9 @@ function AuthPageContent() {
                       <RadioGroupItem
                         value="male"
                         id="male"
-                        disabled={
-                          Boolean(genderAvailability && !genderAvailability.male)
-                        }
+                        disabled={Boolean(
+                          genderAvailability && !genderAvailability.male
+                        )}
                       />
                       <Label
                         htmlFor="male"
@@ -384,9 +366,9 @@ function AuthPageContent() {
                       <RadioGroupItem
                         value="female"
                         id="female"
-                        disabled={
-                          Boolean(genderAvailability && !genderAvailability.female)
-                        }
+                        disabled={Boolean(
+                          genderAvailability && !genderAvailability.female
+                        )}
                       />
                       <Label
                         htmlFor="female"
@@ -408,7 +390,7 @@ function AuthPageContent() {
                       !genderAvailability.female) && (
                       <div className="text-sm text-orange-600 bg-orange-50 p-3 rounded-md">
                         {!genderAvailability.male && !genderAvailability.female
-                          ? "아쉽게도 모든 성별이 마감 되었어요."
+                          ? "아쉽게도 모든 성별이 마감되었어요."
                           : !genderAvailability.male
                           ? "남성 자리는 이미 마감되었어요."
                           : "여성 자리는 이미 마감되었어요."}
@@ -421,7 +403,7 @@ function AuthPageContent() {
                   <Input
                     id="age"
                     type="number"
-                    placeholder="만 나이를 입력해주세요"
+                    placeholder="만 19세 이상만 참여가 가능해요"
                     value={userData.age}
                     onChange={(e) => handleInputChange("age", e.target.value)}
                     min="19"
@@ -457,7 +439,7 @@ function AuthPageContent() {
 
         {/* Info */}
         <div className="text-center text-xs text-gray-500 space-y-1">
-          <p>🔐 걱정 말아요, 개인정보는 별도로 안전하게 보호되어요!</p>
+          <p>🔐 걱정 말아요, 개인정보는 안전하게 보호되어요!</p>
           <p>💛 (개발자 왈) 여러분을 위해 힘들게 카카오 연동 했어요ㅠㅠ</p>
         </div>
       </div>
