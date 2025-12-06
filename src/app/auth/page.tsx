@@ -1,46 +1,56 @@
-'use client';
+"use client";
 
-import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import AppLayout from '@/components/layout/AppLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import AppLayout from "@/components/layout/AppLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 
 interface UserData {
   kakaoId?: string;
   name: string;
   phoneNumber: string;
-  gender: 'male' | 'female' | '';
+  gender: "male" | "female" | "";
   age: string;
 }
 
-type AuthStep = 'kakao' | 'profile';
+type AuthStep = "kakao" | "profile";
 
 function AuthPageContent() {
-  const [step, setStep] = useState<AuthStep>('kakao');
+  const [step, setStep] = useState<AuthStep>("kakao");
   const [userData, setUserData] = useState<UserData>({
-    name: '',
-    phoneNumber: '',
-    gender: '',
-    age: ''
+    name: "",
+    phoneNumber: "",
+    gender: "",
+    age: "",
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const [genderAvailability, setGenderAvailability] = useState<{
+    male: boolean;
+    female: boolean;
+  } | null>(null);
 
   const router = useRouter();
   const searchParams = useSearchParams();
 
   // Handle Kakao callback
   useEffect(() => {
-    const code = searchParams.get('code');
-    const error = searchParams.get('error');
+    const code = searchParams.get("code");
+    const error = searchParams.get("error");
 
     if (error) {
-      setError('카카오 로그인에 실패했습니다. 다시 시도해주세요.');
+      setError("카카오 로그인에 실패했습니다. 다시 시도해주세요.");
       return;
     }
 
@@ -49,8 +59,44 @@ function AuthPageContent() {
     }
   }, [searchParams]);
 
+  const checkGenderAvailability = async () => {
+    try {
+      const { getCurrentEvent, getEventStatus } = await import(
+        "@/lib/firestore"
+      );
+
+      const currentEvent = await getCurrentEvent();
+      if (!currentEvent) {
+        console.log("No current event found");
+        return;
+      }
+
+      const eventStatus = await getEventStatus(currentEvent.id);
+      if (!eventStatus) {
+        console.log("No event status found");
+        return;
+      }
+
+      setGenderAvailability({
+        male: eventStatus.availableMaleSlots > 0,
+        female: eventStatus.availableFemaleSlots > 0,
+      });
+
+      console.log("Gender availability:", {
+        male: eventStatus.availableMaleSlots > 0,
+        female: eventStatus.availableFemaleSlots > 0,
+        maleSlots: eventStatus.availableMaleSlots,
+        femaleSlots: eventStatus.availableFemaleSlots,
+      });
+    } catch (error) {
+      console.error("Error checking gender availability:", error);
+    }
+  };
+
   const handleKakaoLogin = () => {
-    const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${process.env.NEXT_PUBLIC_KAKAO_JS_KEY}&redirect_uri=${encodeURIComponent(
+    const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${
+      process.env.NEXT_PUBLIC_KAKAO_JS_KEY
+    }&redirect_uri=${encodeURIComponent(
       `${window.location.origin}/api/auth/kakao/callback`
     )}&response_type=code`;
 
@@ -59,15 +105,15 @@ function AuthPageContent() {
 
   const handleKakaoCallback = async (code: string) => {
     setIsLoading(true);
-    setError('');
+    setError("");
 
     try {
-      console.log('🟡 Processing Kakao authentication...');
+      console.log("🟡 Processing Kakao authentication...");
 
-      const response = await fetch('/api/auth/kakao', {
-        method: 'POST',
+      const response = await fetch("/api/auth/kakao", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ code }),
       });
@@ -75,89 +121,125 @@ function AuthPageContent() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || '카카오 인증에 실패했습니다.');
+        throw new Error(data.error || "카카오 인증에 실패했습니다.");
       }
 
-      console.log('✅ Kakao authentication successful:', data.user);
+      console.log("✅ Kakao authentication successful:", data.user);
 
       // Check if user already exists
-      const { getUserByKakaoId } = await import('@/lib/firestore');
+      const { getUserByKakaoId } = await import("@/lib/firestore");
       const existingUser = await getUserByKakaoId(data.user.kakaoId);
 
       if (existingUser) {
-        console.log('🔍 User already exists:', existingUser.id);
-        setError(`안녕하세요, ${existingUser.name}님! 이미 가입된 계정입니다. 바 직원에게 문의해 주세요.`);
+        console.log("🔍 User already exists:", existingUser.id);
+        setError(`${existingUser.name}님, 이미 가입된 계정이에요! 잠시만요..`);
+
+        // Store existing user data in sessionStorage for dashboard
+        sessionStorage.setItem(
+          "paymentResult",
+          JSON.stringify({
+            success: true,
+            paymentId: `existing_user_${Date.now()}`,
+            amount: 0, // Existing user, no new payment
+            userData: {
+              kakaoId: existingUser.kakaoId,
+              name: existingUser.name,
+              phoneNumber: existingUser.phoneNumber,
+              gender: existingUser.gender,
+              age: existingUser.age.toString(),
+            },
+          })
+        );
+
+        // Redirect to dashboard after 3 seconds
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 3000);
         return;
       }
 
       // Update user data with Kakao info for new users
-      setUserData(prev => ({
+      setUserData((prev) => ({
         ...prev,
         kakaoId: data.user.kakaoId,
-        name: data.user.name || ''
+        name: data.user.name || "",
       }));
 
-      setStep('profile');
+      setStep("profile");
+
+      // Check gender availability when moving to profile step
+      await checkGenderAvailability();
     } catch (err: any) {
-      console.error('❌ Kakao authentication error:', err);
-      setError(err.message || '카카오 로그인에 실패했습니다. 다시 시도해주세요.');
+      console.error("❌ Kakao authentication error:", err);
+      setError(
+        err.message || "카카오 로그인에 실패했습니다. 다시 시도해주세요."
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoBack = () => {
-    if (step === 'kakao') {
+    if (step === "kakao") {
       router.back();
     } else {
-      setStep('kakao');
+      setStep("kakao");
     }
   };
 
   const formatPhoneNumber = (value: string) => {
-    const numbers = value.replace(/[^\d]/g, '');
+    const numbers = value.replace(/[^\d]/g, "");
     if (numbers.length <= 3) return numbers;
-    if (numbers.length <= 7) return `${numbers.slice(0, 3)}-${numbers.slice(3)}`;
-    return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`;
+    if (numbers.length <= 7)
+      return `${numbers.slice(0, 3)}-${numbers.slice(3)}`;
+    return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(
+      7,
+      11
+    )}`;
   };
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
+    setError("");
 
     try {
-      console.log('👤 Saving user data for payment...');
+      console.log("👤 Saving user data for payment...");
 
       // Store user data in sessionStorage for payment page
-      sessionStorage.setItem('pendingUser', JSON.stringify({
-        kakaoId: userData.kakaoId,
-        name: userData.name,
-        phoneNumber: userData.phoneNumber,
-        gender: userData.gender,
-        age: userData.age
-      }));
+      sessionStorage.setItem(
+        "pendingUser",
+        JSON.stringify({
+          kakaoId: userData.kakaoId,
+          name: userData.name,
+          phoneNumber: userData.phoneNumber,
+          gender: userData.gender,
+          age: userData.age,
+        })
+      );
 
-      console.log('✅ User data saved to sessionStorage');
+      console.log("✅ User data saved to sessionStorage");
 
       // Redirect to payment page
-      router.push('/payment');
+      router.push("/payment");
     } catch (err: any) {
-      console.error('❌ Error creating user:', err);
-      setError(err.message || '회원가입에 실패했습니다. 다시 시도해주세요.');
+      console.error("❌ Error creating user:", err);
+      setError(err.message || "회원가입에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleInputChange = (field: keyof UserData, value: string) => {
-    setUserData(prev => ({ ...prev, [field]: value }));
+    setUserData((prev) => ({ ...prev, [field]: value }));
   };
 
   const getStepTitle = () => {
     switch (step) {
-      case 'kakao': return '카카오 로그인';
-      case 'profile': return '프로필 입력';
+      case "kakao":
+        return "카카오 로그인";
+      case "profile":
+        return "프로필 입력";
     }
   };
 
@@ -166,15 +248,15 @@ function AuthPageContent() {
       <div className="space-y-6">
         {/* Progress Indicator */}
         <div className="flex justify-center space-x-2">
-          {['kakao', 'profile'].map((stepName, index) => (
+          {["kakao", "profile"].map((stepName, index) => (
             <div key={stepName} className="flex items-center">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   step === stepName
-                    ? 'bg-yellow-500 text-white'
-                    : index < ['kakao', 'profile'].indexOf(step)
-                    ? 'bg-yellow-200 text-yellow-800'
-                    : 'bg-gray-200 text-gray-600'
+                    ? "bg-yellow-500 text-white"
+                    : index < ["kakao", "profile"].indexOf(step)
+                    ? "bg-yellow-200 text-yellow-800"
+                    : "bg-gray-200 text-gray-600"
                 }`}
               >
                 {index + 1}
@@ -182,9 +264,9 @@ function AuthPageContent() {
               {index < 1 && (
                 <div
                   className={`w-8 h-0.5 mx-1 ${
-                    index < ['kakao', 'profile'].indexOf(step)
-                      ? 'bg-yellow-200'
-                      : 'bg-gray-200'
+                    index < ["kakao", "profile"].indexOf(step)
+                      ? "bg-yellow-200"
+                      : "bg-gray-200"
                   }`}
                 />
               )}
@@ -193,12 +275,12 @@ function AuthPageContent() {
         </div>
 
         {/* Step Content */}
-        {step === 'kakao' && (
+        {step === "kakao" && (
           <Card>
             <CardHeader>
               <CardTitle>카카오 로그인</CardTitle>
               <CardDescription>
-                카카오톡으로 간편하게 로그인하세요
+                카카오톡으로 간편하게 로그인하세요.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -228,7 +310,7 @@ function AuthPageContent() {
           </Card>
         )}
 
-        {step === 'profile' && (
+        {step === "profile" && (
           <Card>
             <CardHeader>
               <CardTitle>프로필 정보 입력</CardTitle>
@@ -245,7 +327,7 @@ function AuthPageContent() {
                     type="text"
                     placeholder="실명을 입력해주세요"
                     value={userData.name}
-                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    onChange={(e) => handleInputChange("name", e.target.value)}
                     disabled={isLoading}
                     required
                   />
@@ -260,7 +342,7 @@ function AuthPageContent() {
                     value={userData.phoneNumber}
                     onChange={(e) => {
                       const formattedPhone = formatPhoneNumber(e.target.value);
-                      handleInputChange('phoneNumber', formattedPhone);
+                      handleInputChange("phoneNumber", formattedPhone);
                     }}
                     disabled={isLoading}
                     required
@@ -271,18 +353,67 @@ function AuthPageContent() {
                   <Label>성별</Label>
                   <RadioGroup
                     value={userData.gender}
-                    onValueChange={(value) => handleInputChange('gender', value)}
+                    onValueChange={(value) =>
+                      handleInputChange("gender", value)
+                    }
                     className="flex space-x-6"
                   >
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="male" id="male" />
-                      <Label htmlFor="male">남성</Label>
+                      <RadioGroupItem
+                        value="male"
+                        id="male"
+                        disabled={
+                          genderAvailability && !genderAvailability.male
+                        }
+                      />
+                      <Label
+                        htmlFor="male"
+                        className={
+                          genderAvailability && !genderAvailability.male
+                            ? "text-gray-400"
+                            : ""
+                        }
+                      >
+                        남성{" "}
+                        {genderAvailability &&
+                          !genderAvailability.male &&
+                          "(마감)"}
+                      </Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="female" id="female" />
-                      <Label htmlFor="female">여성</Label>
+                      <RadioGroupItem
+                        value="female"
+                        id="female"
+                        disabled={
+                          genderAvailability && !genderAvailability.female
+                        }
+                      />
+                      <Label
+                        htmlFor="female"
+                        className={
+                          genderAvailability && !genderAvailability.female
+                            ? "text-gray-400"
+                            : ""
+                        }
+                      >
+                        여성{" "}
+                        {genderAvailability &&
+                          !genderAvailability.female &&
+                          "(마감)"}
+                      </Label>
                     </div>
                   </RadioGroup>
+                  {genderAvailability &&
+                    (!genderAvailability.male ||
+                      !genderAvailability.female) && (
+                      <div className="text-sm text-orange-600 bg-orange-50 p-3 rounded-md">
+                        {!genderAvailability.male && !genderAvailability.female
+                          ? "아쉽게도 모든 성별이 마감 되었어요."
+                          : !genderAvailability.male
+                          ? "남성 자리는 이미 마감되었어요."
+                          : "여성 자리는 이미 마감되었어요."}
+                      </div>
+                    )}
                 </div>
 
                 <div className="space-y-2">
@@ -292,7 +423,7 @@ function AuthPageContent() {
                     type="number"
                     placeholder="만 나이를 입력해주세요"
                     value={userData.age}
-                    onChange={(e) => handleInputChange('age', e.target.value)}
+                    onChange={(e) => handleInputChange("age", e.target.value)}
                     min="19"
                     max="100"
                     disabled={isLoading}
@@ -309,9 +440,15 @@ function AuthPageContent() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={isLoading || !userData.name || !userData.phoneNumber || !userData.gender || !userData.age}
+                  disabled={
+                    isLoading ||
+                    !userData.name ||
+                    !userData.phoneNumber ||
+                    !userData.gender ||
+                    !userData.age
+                  }
                 >
-                  {isLoading ? <LoadingSpinner size="sm" /> : '다음 단계로'}
+                  {isLoading ? <LoadingSpinner size="sm" /> : "다음 단계로"}
                 </Button>
               </form>
             </CardContent>
@@ -320,8 +457,8 @@ function AuthPageContent() {
 
         {/* Info */}
         <div className="text-center text-xs text-gray-500 space-y-1">
-          <p>🔐 개인정보는 안전하게 보호됩니다</p>
-          <p>💛 카카오 로그인으로 간편하게 인증하세요</p>
+          <p>🔐 걱정 말아요, 개인정보는 별도로 안전하게 보호되어요!</p>
+          <p>💛 (개발자 왈) 여러분을 위해 힘들게 카카오 연동 했어요ㅠㅠ</p>
         </div>
       </div>
     </AppLayout>

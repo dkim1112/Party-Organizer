@@ -1,20 +1,33 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import AppLayout from '@/components/layout/AppLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import LoadingSpinner from '@/components/common/LoadingSpinner';
-import { getCurrentEvent, getUserByKakaoId, cancelRegistration } from '@/lib/firestore';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import AppLayout from "@/components/layout/AppLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
+import {
+  getCurrentEvent,
+  getUserByKakaoId,
+  cancelRegistration,
+  getMenuItems,
+  getQuestionnaireAnswers,
+} from "@/lib/firestore";
+import { MenuItem } from "@/types";
 
 interface UserInfo {
   name: string;
   phoneNumber: string;
-  gender: 'male' | 'female';
+  gender: "male" | "female";
   age: number;
-  paymentStatus: 'completed' | 'pending' | 'failed';
+  paymentStatus: "completed" | "pending" | "failed";
 }
 
 interface EventInfo {
@@ -28,102 +41,184 @@ interface EventInfo {
 
 export default function DashboardPage() {
   const [userInfo, setUserInfo] = useState<UserInfo>({
-    name: '김철수',
-    phoneNumber: '010-1234-5678',
-    gender: 'male',
-    age: 28,
-    paymentStatus: 'completed'
+    name: "김철수",
+    phoneNumber: "010-1234-5678",
+    gender: "male",
+    age: 99,
+    paymentStatus: "completed",
   });
+  const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [hasQuestionnaireAnswers, setHasQuestionnaireAnswers] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentEventId, setCurrentEventId] = useState<string | null>(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-
 
   useEffect(() => {
     const uniqueId = Math.random().toString(36).substr(2, 9);
     console.log(`🔄 Dashboard useEffect started [${uniqueId}]`);
 
-    // Load user data from session storage
-    const loadUserData = async () => {
+    // Load user data and event data
+    const loadData = async () => {
       try {
-        console.log(`📊 Loading user data... [${uniqueId}]`);
-        const paymentResultData = sessionStorage.getItem('paymentResult');
-        const pendingUserData = sessionStorage.getItem('pendingUser');
+        console.log(`📊 Loading data... [${uniqueId}]`);
+
+        // Load user data from session storage
+        const paymentResultData = sessionStorage.getItem("paymentResult");
+        const pendingUserData = sessionStorage.getItem("pendingUser");
 
         console.log(`💾 SessionStorage check [${uniqueId}]:`);
-        console.log('- paymentResult:', paymentResultData ? 'EXISTS' : 'MISSING');
-        console.log('- pendingUser:', pendingUserData ? 'EXISTS' : 'MISSING');
+        console.log(
+          "- paymentResult:",
+          paymentResultData ? "EXISTS" : "MISSING"
+        );
+        console.log("- pendingUser:", pendingUserData ? "EXISTS" : "MISSING");
 
         let userData = null;
-        let paymentStatus = 'pending';
+        let paymentStatus = "pending";
 
         if (paymentResultData) {
-          console.log('🔍 Parsing paymentResult...');
+          console.log("🔍 Parsing paymentResult...");
           const paymentResult = JSON.parse(paymentResultData);
-          console.log('📄 PaymentResult content:', paymentResult);
+          console.log("📄 PaymentResult content:", paymentResult);
 
           if (paymentResult.success) {
-            console.log('✅ Payment was successful');
+            console.log("✅ Payment was successful");
             userData = paymentResult.userData;
-            paymentStatus = 'completed';
+            paymentStatus = "completed";
 
             // Registration is now created by payment page, no need to create here
-            console.log(`✅ Payment completed, user and registration already created by payment page [${uniqueId}]`);
+            console.log(
+              `✅ Payment completed, user and registration already created by payment page [${uniqueId}]`
+            );
           } else {
-            console.log('❌ Payment was not successful');
+            console.log("❌ Payment was not successful");
           }
         } else if (pendingUserData) {
           userData = JSON.parse(pendingUserData);
-          paymentStatus = 'pending';
+          paymentStatus = "pending";
         }
 
         if (userData) {
           setUserInfo({
-            name: userData.name || '사용자',
-            phoneNumber: userData.phoneNumber || '010-0000-0000',
-            gender: userData.gender || 'male',
-            age: parseInt(userData.age) || 25,
-            paymentStatus: paymentStatus as 'completed' | 'pending' | 'failed'
+            name: userData.name || "사용자",
+            phoneNumber: userData.phoneNumber || "010-0000-0000",
+            gender: userData.gender || "male",
+            age: parseInt(userData.age) || 99,
+            paymentStatus: paymentStatus as "completed" | "pending" | "failed",
           });
         }
+
+        // Load event data from Firestore
+        console.log(`📅 Loading current event... [${uniqueId}]`);
+        const currentEvent = await getCurrentEvent();
+
+        if (currentEvent) {
+          console.log("✅ Current event found:", currentEvent);
+          setCurrentEventId(currentEvent.id);
+
+          // Convert Firestore timestamp to readable date
+          const eventDate = (currentEvent.date as any).toDate
+            ? (currentEvent.date as any).toDate()
+            : new Date(currentEvent.date as any);
+
+          setEventInfo({
+            date: eventDate.toLocaleDateString("ko-KR", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              weekday: "short",
+            }),
+            time: currentEvent.time || "시간 미정",
+            location: currentEvent.location || "장소 미정",
+            mcName: currentEvent.mcName || "MC 미정",
+            description: currentEvent.description || "이벤트 설명이 없습니다.",
+            rules: currentEvent.rules || [
+              "상대방을 존중하며 예의를 지켜주세요",
+              "개인정보는 서로 동의 하에 공유해주세요",
+              "과도한 음주는 자제해주세요",
+              "휴대폰 사용은 최소화해주세요",
+            ],
+          });
+        } else {
+          console.log("❌ No current event found");
+          // Set default event info if no event is found
+          setEventInfo({
+            date: "이벤트 날짜 미정",
+            time: "시간 미정",
+            location: "장소 미정",
+            mcName: "MC 미정",
+            description: "현재 활성화된 이벤트가 없습니다.",
+            rules: [
+              "상대방을 존중하며 예의를 지켜주세요",
+              "개인정보는 서로 동의 하에 공유해주세요",
+              "과도한 음주는 자제해주세요",
+              "휴대폰 사용은 최소화해주세요",
+            ],
+          });
+        }
+
+        // Load menu items from Firestore
+        console.log(`🍽️ Loading menu items... [${uniqueId}]`);
+        const menuData = await getMenuItems();
+        setMenuItems(menuData);
+        console.log(
+          `✅ Menu items loaded: ${menuData.length} items [${uniqueId}]`
+        );
+
+        // Check questionnaire status if we have user and event data
+        if (userData && userData.kakaoId && currentEvent) {
+          console.log(`📋 Checking questionnaire status... [${uniqueId}]`);
+
+          // Get user from database to get their ID
+          const user = await getUserByKakaoId(userData.kakaoId);
+          if (user) {
+            setCurrentUserId(user.id);
+
+            // Check if user has already submitted questionnaire
+            const existingAnswers = await getQuestionnaireAnswers(
+              user.id,
+              currentEvent.id
+            );
+            setHasQuestionnaireAnswers(existingAnswers !== null);
+
+            console.log(
+              `${existingAnswers ? "✅" : "❌"} Questionnaire status: ${
+                existingAnswers ? "completed" : "not completed"
+              } [${uniqueId}]`
+            );
+          }
+        }
       } catch (error) {
-        console.error('Error loading user data:', error);
+        console.error("Error loading data:", error);
       } finally {
         setIsDataLoaded(true);
       }
     };
 
-    loadUserData();
+    loadData();
   }, []);
 
-  const [eventInfo] = useState<EventInfo>({
-    date: '2024년 12월 5일',
-    time: '오후 8:00 - 11:00',
-    location: '강남구 꺄르륵 바',
-    mcName: '김진우',
-    description: '새로운 인연을 만날 수 있는 즐거운 소셜 파티입니다. 편안한 분위기에서 다양한 게임과 대화를 통해 특별한 만남을 경험해보세요!',
-    rules: [
-      '상대방을 존중하며 예의를 지켜주세요',
-      '개인정보는 서로 동의 하에 공유해주세요',
-      '과도한 음주는 자제해주세요',
-      '휴대폰 사용은 최소화해주세요'
-    ]
-  });
-
-  const [activeTab, setActiveTab] = useState<'event' | 'profile'>('event');
+  const [activeTab, setActiveTab] = useState<"event" | "profile">("event");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const handleCancelRegistration = async () => {
-    if (confirm('정말로 참가를 취소하시겠습니까? 취소 정책에 따라 수수료가 발생할 수 있습니다.')) {
+    if (
+      confirm(
+        "정말로 참가를 취소하시겠습니까? 취소 정책에 따라 수수료가 발생할 수 있습니다."
+      )
+    ) {
       setIsLoading(true);
       try {
-        console.log('🚫 Starting cancellation process...');
+        console.log("🚫 Starting cancellation process...");
 
         // Get current user data from session storage
-        const pendingUserData = sessionStorage.getItem('pendingUser');
-        const paymentResultData = sessionStorage.getItem('paymentResult');
+        const pendingUserData = sessionStorage.getItem("pendingUser");
+        const paymentResultData = sessionStorage.getItem("paymentResult");
 
         if (!pendingUserData && !paymentResultData) {
-          throw new Error('사용자 정보를 찾을 수 없습니다');
+          throw new Error("사용자 정보를 찾을 수 없습니다");
         }
 
         let userData = null;
@@ -135,33 +230,35 @@ export default function DashboardPage() {
         }
 
         if (!userData || !userData.kakaoId) {
-          throw new Error('사용자 정보가 올바르지 않습니다');
+          throw new Error("사용자 정보가 올바르지 않습니다");
         }
 
         // Get user from database
         const user = await getUserByKakaoId(userData.kakaoId);
         if (!user) {
-          throw new Error('데이터베이스에서 사용자를 찾을 수 없습니다');
+          throw new Error("데이터베이스에서 사용자를 찾을 수 없습니다");
         }
 
         // Get current event
         const currentEvent = await getCurrentEvent();
         if (!currentEvent) {
-          throw new Error('활성 이벤트를 찾을 수 없습니다');
+          throw new Error("활성 이벤트를 찾을 수 없습니다");
         }
 
         // Cancel the registration
         await cancelRegistration(user.id, currentEvent.id);
 
         // Clear session storage
-        sessionStorage.removeItem('pendingUser');
-        sessionStorage.removeItem('paymentResult');
+        sessionStorage.removeItem("pendingUser");
+        sessionStorage.removeItem("paymentResult");
         localStorage.clear();
 
-        alert('참가가 취소되었습니다. 환불은 1-2일 내에 처리됩니다.');
-        router.push('/');
+        alert(
+          "참가가 취소 되었습니다. 환불 문의는 별도로 DM: yeonrim_bar로 보내주세요."
+        );
+        router.push("/");
       } catch (error: any) {
-        console.error('❌ Error cancelling registration:', error);
+        console.error("❌ Error cancelling registration:", error);
         alert(`취소 처리 중 오류가 발생했습니다: ${error.message}`);
       } finally {
         setIsLoading(false);
@@ -170,12 +267,19 @@ export default function DashboardPage() {
   };
 
   const handleQuestionnaireClick = () => {
-    // TODO: Implement questionnaire page
-    alert('질문지 기능은 곧 추가될 예정입니다!');
+    if (hasQuestionnaireAnswers) {
+      // View existing answers
+      router.push(
+        `/questionnaire?view=true&userId=${currentUserId}&eventId=${currentEventId}`
+      );
+    } else {
+      // Create new questionnaire
+      router.push("/questionnaire");
+    }
   };
 
   return (
-    <AppLayout title="꺄르륵 파티 🎉">
+    <AppLayout title="🎉 꺄르륵 파티 🎉">
       <div className="space-y-6">
         {/* Welcome Message */}
         <div className="text-center space-y-2">
@@ -183,28 +287,28 @@ export default function DashboardPage() {
             환영합니다, {userInfo.name}님! 🎊
           </h2>
           <p className="text-gray-600 text-sm">
-            참가 신청이 완료되었습니다
+            참가 신청이 성공적으로 완료 되었어요.
           </p>
         </div>
 
         {/* Tab Navigation */}
         <div className="flex rounded-lg bg-gray-100 p-1">
           <button
-            onClick={() => setActiveTab('event')}
+            onClick={() => setActiveTab("event")}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'event'
-                ? 'bg-white text-purple-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+              activeTab === "event"
+                ? "bg-white text-purple-600 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
             }`}
           >
             이벤트 정보
           </button>
           <button
-            onClick={() => setActiveTab('profile')}
+            onClick={() => setActiveTab("profile")}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'profile'
-                ? 'bg-white text-purple-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+              activeTab === "profile"
+                ? "bg-white text-purple-600 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
             }`}
           >
             내 정보
@@ -212,9 +316,46 @@ export default function DashboardPage() {
         </div>
 
         {/* Event Tab */}
-        {activeTab === 'event' && (
+        {activeTab === "event" && !eventInfo && (
+          <div className="flex justify-center items-center h-64">
+            <LoadingSpinner size="lg" text="이벤트 정보를 불러오는 중..." />
+          </div>
+        )}
+        {activeTab === "event" && eventInfo && (
           <div className="space-y-4">
             {/* Event Details */}
+            {/* Questionnaire */}
+            <Card className="border-purple-200 bg-purple-50">
+              <CardHeader>
+                <CardTitle className="text-purple-800 flex items-center justify-between">
+                  <span>💕 사전 질문지 (필수!)</span>
+                  {hasQuestionnaireAnswers && (
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                      완료
+                    </span>
+                  )}
+                </CardTitle>
+                <CardDescription className="text-purple-700">
+                  {hasQuestionnaireAnswers
+                    ? "작성하신 질문지를 다시 확인할 수 있어요."
+                    : "이벤트 당일, 본인에게 관심있는 상대방이 보게 될 거에요."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={handleQuestionnaireClick}
+                  className={`w-full ${
+                    hasQuestionnaireAnswers
+                      ? "bg-gray-600 hover:bg-gray-700"
+                      : "bg-purple-600 hover:bg-purple-700"
+                  }`}
+                >
+                  {hasQuestionnaireAnswers
+                    ? "내 설문 보기 👀"
+                    : "작성하러 가기 ✨"}
+                </Button>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
@@ -250,7 +391,9 @@ export default function DashboardPage() {
                 <CardTitle>🎪 이벤트 소개</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-700 leading-relaxed">{eventInfo.description}</p>
+                <p className="text-gray-700 leading-relaxed">
+                  {eventInfo.description}
+                </p>
               </CardContent>
             </Card>
 
@@ -262,7 +405,10 @@ export default function DashboardPage() {
               <CardContent>
                 <ul className="space-y-2">
                   {eventInfo.rules.map((rule, index) => (
-                    <li key={index} className="flex items-start space-x-2 text-gray-700">
+                    <li
+                      key={index}
+                      className="flex items-start space-x-2 text-gray-700"
+                    >
                       <span className="text-purple-600 mt-1">•</span>
                       <span className="text-sm">{rule}</span>
                     </li>
@@ -271,28 +417,44 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Questionnaire */}
-            <Card className="border-purple-200 bg-purple-50">
-              <CardHeader>
-                <CardTitle className="text-purple-800">💕 매칭 질문지</CardTitle>
-                <CardDescription className="text-purple-700">
-                  더 좋은 매칭을 위한 간단한 질문지를 작성해주세요
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  onClick={handleQuestionnaireClick}
-                  className="w-full bg-purple-600 hover:bg-purple-700"
-                >
-                  질문지 작성하기 ✨
-                </Button>
-              </CardContent>
-            </Card>
+            {/* Menu */}
+            {menuItems.length > 0 && (
+              <Card className="border-orange-200 bg-orange-50">
+                <CardHeader>
+                  <CardTitle className="text-orange-800 flex items-center space-x-2">
+                    <span>🥃</span>
+                    <span>주류 라인업</span>
+                  </CardTitle>
+                  <CardDescription className="text-orange-700">
+                    당일 제공되는 것들이에요 (택 1).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-3">
+                    {menuItems.map((item, index) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center space-x-2 py-2"
+                      >
+                        <div className="flex-shrink-0 w-5 h-5 rounded-full bg-orange-200 flex items-center justify-center">
+                          <span className="text-xs font-medium text-orange-800">
+                            {index + 1}
+                          </span>
+                        </div>
+                        <span className="text-sm text-gray-800 font-medium">
+                          {item.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
         {/* Profile Tab */}
-        {activeTab === 'profile' && (
+        {activeTab === "profile" && (
           <div className="space-y-4">
             {/* User Info */}
             <Card>
@@ -303,10 +465,20 @@ export default function DashboardPage() {
                     <span>내 정보</span>
                   </div>
                   <Badge
-                    variant={userInfo.paymentStatus === 'completed' ? 'default' : 'destructive'}
-                    className={userInfo.paymentStatus === 'completed' ? 'bg-green-500' : ''}
+                    variant={
+                      userInfo.paymentStatus === "completed"
+                        ? "default"
+                        : "destructive"
+                    }
+                    className={
+                      userInfo.paymentStatus === "completed"
+                        ? "bg-green-500"
+                        : ""
+                    }
                   >
-                    {userInfo.paymentStatus === 'completed' ? '결제 완료' : '결제 대기'}
+                    {userInfo.paymentStatus === "completed"
+                      ? "결제 완료"
+                      : "결제 대기"}
                   </Badge>
                 </CardTitle>
               </CardHeader>
@@ -323,7 +495,7 @@ export default function DashboardPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">성별</span>
                     <span className="font-medium">
-                      {userInfo.gender === 'male' ? '남성' : '여성'}
+                      {userInfo.gender === "male" ? "남성" : "여성"}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -341,9 +513,15 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="space-y-2 text-sm text-gray-600">
-                  <p><strong>이벤트 문의:</strong> 바 직원에게 직접 문의</p>
-                  <p><strong>결제 문의:</strong> 바 직원에게 직접 문의</p>
-                  <p><strong>응급상황:</strong> 이벤트 진행 중 MC에게 문의</p>
+                  <p>
+                    <strong>이벤트 문의:</strong> DM: yeonrim_bar
+                  </p>
+                  <p>
+                    <strong>결제 문의:</strong> DM: yeonrim_bar
+                  </p>
+                  <p>
+                    <strong>웹사이트 오류:</strong> 010-6749-1894로 문자
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -353,15 +531,15 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle className="text-red-700">⚠️ 참가 취소</CardTitle>
                 <CardDescription className="text-red-600">
-                  취소 정책을 확인 후 신중히 결정해주세요
+                  취소 정책을 꼼꼼히 확인 후 결정해주세요.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="bg-red-50 p-3 rounded-md text-xs text-red-700">
                   <ul className="space-y-1">
-                    <li>• 이벤트 2시간 전까지: 100% 환불</li>
-                    <li>• 이벤트 2시간 내: 50% 수수료 발생</li>
-                    <li>• 이벤트 시작 후: 환불 불가</li>
+                    <li>• 이벤트 하루 전까지: 100% 환불</li>
+                    <li>• 이벤트 당일: 50% 수수료 발생</li>
+                    <li>• 이벤트 시작 8시간 전: 환불 불가</li>
                   </ul>
                 </div>
                 <Button
@@ -370,11 +548,7 @@ export default function DashboardPage() {
                   className="w-full"
                   disabled={isLoading}
                 >
-                  {isLoading ? (
-                    <LoadingSpinner size="sm" />
-                  ) : (
-                    '참가 취소하기'
-                  )}
+                  {isLoading ? <LoadingSpinner size="sm" /> : "참가 취소하기"}
                 </Button>
               </CardContent>
             </Card>
@@ -383,8 +557,8 @@ export default function DashboardPage() {
 
         {/* Bottom Message */}
         <div className="text-center text-xs text-gray-500 space-y-1">
-          <p>🎉 멋진 만남이 기다리고 있어요!</p>
-          <p>문의사항은 언제든 바 직원에게 말씀해주세요</p>
+          <p>우리 조만간 봐요 :)</p>
+          <p>화면 오류 발생 시, 다시 로딩 시도!</p>
         </div>
       </div>
     </AppLayout>

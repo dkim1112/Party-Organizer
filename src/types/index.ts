@@ -53,6 +53,7 @@ export interface Question {
   id: string;
   type: "text" | "select" | "multiselect" | "radio";
   title: string;
+  subtitle?: string;
   options?: string[];
   required: boolean;
   order: number;
@@ -73,4 +74,9 @@ export interface EventStatus {
   availableMaleSlots: number;
   availableFemaleSlots: number;
   canJoin: boolean;
+}
+
+export interface MenuItem {
+  id: string;
+  name: string;
 }
