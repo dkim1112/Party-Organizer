@@ -375,6 +375,15 @@ export const createMenuItem = async (name: string) => {
   }
 };
 
+export const deleteMenuItem = async (menuItemId: string) => {
+  try {
+    await deleteDoc(doc(db, "menu", menuItemId));
+  } catch (error) {
+    console.error("Error deleting menu item:", error);
+    throw error;
+  }
+};
+
 // Questionnaire operations
 export const getQuestions = async (): Promise<Question[]> => {
   try {
@@ -405,6 +414,15 @@ export const createQuestion = async (questionData: Omit<Question, "id">) => {
     return questionDoc.id;
   } catch (error) {
     console.error("Error creating question:", error);
+    throw error;
+  }
+};
+
+export const deleteQuestion = async (questionId: string) => {
+  try {
+    await deleteDoc(doc(db, "questions", questionId));
+  } catch (error) {
+    console.error("Error deleting question:", error);
     throw error;
   }
 };

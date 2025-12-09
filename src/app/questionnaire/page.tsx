@@ -157,7 +157,7 @@ export default function QuestionnairePage() {
       // Also save to sessionStorage for backup
       sessionStorage.setItem("questionnaireAnswers", JSON.stringify(answers));
 
-      alert("질문지 작성이 완료되었습니다! 감사합니다 💕");
+      alert("질문지 작성 완료! 감사합니다 💕");
       router.push("/dashboard");
     } catch (error: any) {
       setError(`답변 저장에 실패했습니다: ${error.message}`);
@@ -170,12 +170,14 @@ export default function QuestionnairePage() {
     router.back();
   };
 
-  const answeredCount = Object.keys(answers).filter((key) => {
+  const requiredQuestions = questions.filter(q => q.required);
+  const answeredRequiredCount = Object.keys(answers).filter((key) => {
     const answer = answers[key];
-    return typeof answer === "string" && answer.trim();
+    const question = questions.find(q => q.id === key);
+    return question?.required && typeof answer === "string" && answer.trim();
   }).length;
   const progressPercentage =
-    questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
+    requiredQuestions.length > 0 ? (answeredRequiredCount / requiredQuestions.length) * 100 : 0;
 
   if (isLoading) {
     return (
@@ -232,9 +234,9 @@ export default function QuestionnairePage() {
             <CardContent>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>작성 진행률</span>
+                  <span>작성 진행률 (필수 질문)</span>
                   <span>
-                    {answeredCount}/{questions.length}
+                    {answeredRequiredCount}/{requiredQuestions.length}
                   </span>
                 </div>
                 <div className="w-full bg-purple-200 rounded-full h-2">
@@ -316,18 +318,18 @@ export default function QuestionnairePage() {
               <CardContent>
                 <div className="text-center space-y-3">
                   <p className="text-sm text-green-800">
-                    모든 질문에 답변하면 제출할 수 있어요!
+                    모든 필수 질문에 답변하면 제출할 수 있어요!
                   </p>
                   <Button
                     onClick={handleSubmit}
-                    disabled={isSubmitting || answeredCount < questions.length}
+                    disabled={isSubmitting || answeredRequiredCount < requiredQuestions.length}
                     className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300"
                     size="lg"
                   >
                     {isSubmitting ? (
                       <LoadingSpinner size="sm" />
                     ) : (
-                      `질문지 제출하기 (${answeredCount}/${questions.length})`
+                      `질문지 제출하기 (필수 ${answeredRequiredCount}/${requiredQuestions.length})`
                     )}
                   </Button>
                 </div>
@@ -338,7 +340,7 @@ export default function QuestionnairePage() {
 
         {/* Footer */}
         <div className="text-center text-xs text-gray-500 space-y-1">
-          <p>🔒 답변은 관심있는 상대방만 볼 수 있어요.</p>
+          <p>🔒 전체 답변은 관심있는 상대방만 볼 수 있어요.</p>
         </div>
       </div>
     </AppLayout>

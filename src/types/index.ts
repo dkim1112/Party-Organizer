@@ -51,7 +51,7 @@ export interface QuestionnaireAnswers {
 
 export interface Question {
   id: string;
-  type: "text" | "select" | "multiselect" | "radio";
+  type: "text";
   title: string;
   subtitle?: string;
   options?: string[];

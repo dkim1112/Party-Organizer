@@ -297,7 +297,7 @@ export default function DashboardPage() {
                 <CardDescription className="text-purple-700">
                   {hasQuestionnaireAnswers
                     ? "작성하신 질문지를 다시 확인할 수 있어요."
-                    : "이벤트 당일, 본인에게 관심있는 상대방이 보게 될 거에요."}
+                    : "본인에게 관심있는 상대방이 보게 될 거에요."}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -385,7 +385,7 @@ export default function DashboardPage() {
                     <span>주류 라인업</span>
                   </CardTitle>
                   <CardDescription className="text-orange-700">
-                    당일 제공되는 것들이에요 (택 1).
+                    당일 제공되는 것들이에요 (마음속으로 택1).
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
