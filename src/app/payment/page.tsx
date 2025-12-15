@@ -309,9 +309,9 @@ export default function PaymentPage() {
               <h4 className="font-bold text-sm text-gray-800 mb-2">
                 결제 안내사항
               </h4>
-              <p>• 환불취소는 이벤트 8시간 전까지 가능해요.</p>
-              <p>• 결제 관련 문의는 DM 해주세요.</p>
-              <p>• 돈 지출 내역을 꼭 확인 해주세요.</p>
+              <p>• 환불취소는 이벤트 하루 전까지 가능해요.</p>
+              <p>• 계좌 입금 희망시: 국민 01027695861 (이중후)</p>
+              <p>• 다른 문의 사항들은 DM 주세요.</p>
             </div>
           </CardContent>
         </Card>

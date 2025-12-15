@@ -347,7 +347,7 @@ export default function DashboardPage() {
             {/* Event Description */}
             <Card>
               <CardHeader>
-                <CardTitle>🎪 이벤트 소개</CardTitle>
+                <CardTitle>🎪 꺄르륵 파티란?</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-gray-700 leading-relaxed">
@@ -497,8 +497,7 @@ export default function DashboardPage() {
                 <div className="bg-red-50 p-3 rounded-md text-xs text-red-700">
                   <ul className="space-y-1">
                     <li>• 이벤트 하루 전까지: 100% 환불</li>
-                    <li>• 이벤트 당일: 50% 수수료 발생</li>
-                    <li>• 이벤트 시작 8시간 전: 환불 불가</li>
+                    <li>• 이벤트 당일: 환불 불가</li>
                   </ul>
                 </div>
                 <Button
