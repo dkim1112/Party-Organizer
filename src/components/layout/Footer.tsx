@@ -14,14 +14,15 @@ export default function Footer() {
             <span className="text-gray-600">사업자등록번호:</span> 405-03-96769
           </p>
           <p>
-            <span className="text-gray-600">주소:</span> 서울특별시 관악구 행운1길 56 지하1층 연림
+            <span className="text-gray-600">주소:</span> 서울특별시 관악구
+            행운1길 56 지하1층 연림
           </p>
           <p>
             <span className="text-gray-600">전화번호:</span> 010-4013-5771
           </p>
           <div className="border-t border-gray-200 mt-3 pt-3">
             <p className="text-gray-400">
-              Copyright 2025. 꺄르륵. All rights reserved.
+              Copyright 2025. 연림. All rights reserved.
             </p>
           </div>
         </div>

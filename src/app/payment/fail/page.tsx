@@ -11,13 +11,15 @@ import LoadingSpinner from "@/components/common/LoadingSpinner";
 const ERROR_MESSAGES: Record<string, string> = {
   PAY_PROCESS_CANCELED: "결제가 취소되었습니다.",
   PAY_PROCESS_ABORTED: "결제 진행 중 문제가 발생했습니다.",
-  REJECT_CARD_COMPANY: "카드사에서 결제를 거절했습니다. 다른 카드로 시도해주세요.",
+  REJECT_CARD_COMPANY:
+    "카드사에서 결제를 거절했습니다. 다른 카드로 시도해주세요.",
   EXCEED_MAX_DAILY_PAYMENT_COUNT: "일일 결제 한도를 초과했습니다.",
   EXCEED_MAX_PAYMENT_AMOUNT: "결제 금액 한도를 초과했습니다.",
   INVALID_CARD_EXPIRATION: "카드 유효기간이 만료되었습니다.",
   INVALID_STOPPED_CARD: "정지된 카드입니다.",
   INVALID_CARD_LOST_OR_STOLEN: "분실 또는 도난 신고된 카드입니다.",
-  NOT_SUPPORTED_INSTALLMENT_PLAN_CARD_OR_MERCHANT: "할부가 지원되지 않는 카드입니다.",
+  NOT_SUPPORTED_INSTALLMENT_PLAN_CARD_OR_MERCHANT:
+    "할부가 지원되지 않는 카드입니다.",
   INVALID_CARD_NUMBER: "카드 번호가 올바르지 않습니다.",
   BELOW_MINIMUM_AMOUNT: "최소 결제 금액 이하입니다.",
   ALREADY_PROCESSED_PAYMENT: "이미 처리된 결제입니다.",
@@ -30,7 +32,8 @@ function PaymentFailContent() {
   const searchParams = useSearchParams();
 
   const errorCode = searchParams.get("code") || "UNKNOWN_ERROR";
-  const errorMessage = searchParams.get("message") || "알 수 없는 오류가 발생했습니다.";
+  const errorMessage =
+    searchParams.get("message") || "알 수 없는 오류가 발생했습니다.";
 
   // 한글 메시지가 있으면 사용, 없으면 토스에서 받은 메시지 사용
   const displayMessage = ERROR_MESSAGES[errorCode] || errorMessage;
@@ -41,7 +44,6 @@ function PaymentFailContent() {
         <Card className="border-red-200 bg-red-50">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-red-600">
-              <span className="text-2xl">❌</span>
               <span>결제에 실패했습니다</span>
             </CardTitle>
           </CardHeader>
@@ -77,7 +79,9 @@ function PaymentFailContent() {
         <Card className="bg-gray-50">
           <CardContent className="pt-4">
             <div className="space-y-3 text-sm text-gray-600">
-              <h4 className="font-bold text-gray-800">결제가 계속 실패하나요?</h4>
+              <h4 className="font-bold text-gray-800">
+                결제가 계속 실패하나요?
+              </h4>
               <ul className="space-y-2">
                 <li>• 다른 카드로 시도해보세요.</li>
                 <li>• 카드사 앱에서 한도를 확인해주세요.</li>

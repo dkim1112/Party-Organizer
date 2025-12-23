@@ -10,7 +10,9 @@ import LoadingSpinner from "@/components/common/LoadingSpinner";
 function PaymentSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<"processing" | "success" | "error">("processing");
+  const [status, setStatus] = useState<"processing" | "success" | "error">(
+    "processing"
+  );
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
@@ -61,9 +63,8 @@ function PaymentSuccessContent() {
         }
 
         // 결제 승인 성공 - 사용자 및 등록 생성
-        const { createUser, createRegistration, getCurrentEvent } = await import(
-          "@/lib/firestore"
-        );
+        const { createUser, createRegistration, getCurrentEvent } =
+          await import("@/lib/firestore");
 
         console.log("Creating user in Firestore...");
         const userId = await createUser({
@@ -173,14 +174,11 @@ function PaymentSuccessContent() {
       <Card className="border-green-200 bg-green-50">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2 text-green-600">
-            <span className="text-2xl">✅</span>
             <span>결제가 완료되었습니다!</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-green-700">
-            이벤트 참가 등록이 완료되었습니다.
-          </p>
+          <p className="text-green-700">이벤트 참가 등록이 완료되었습니다.</p>
           <p className="text-sm text-gray-600">
             잠시 후 대시보드로 이동합니다...
           </p>

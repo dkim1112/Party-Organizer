@@ -70,7 +70,8 @@ export default function Home() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="비번은 [연림]에서 확인이 가능해요."
+                  // placeholder="비번은 [연림]에서 확인이 가능해요."
+                  placeholder="dongeun (입력하시면 됩니다)"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}

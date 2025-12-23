@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { loadPaymentWidget, PaymentWidgetInstance } from "@tosspayments/payment-widget-sdk";
+import { loadMockPaymentWidget, shouldUseMockPayment } from "@/lib/mockPayment";
+import SimpleTossWidget from "@/components/payment/SimpleTossWidget";
 import AppLayout from "@/components/layout/AppLayout";
 import {
   Card,
@@ -15,8 +16,7 @@ import { Button } from "@/components/ui/button";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import { generateOrderId } from "@/lib/payment";
 
-// 테스트용 클라이언트 키 (실제 배포시 환경변수로 교체)
-const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
+const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || "";
 
 interface PaymentInfo {
   amount: number;
@@ -42,8 +42,9 @@ export default function PaymentPage() {
   const [widgetReady, setWidgetReady] = useState(false);
   const router = useRouter();
 
-  const paymentWidgetRef = useRef<PaymentWidgetInstance | null>(null);
-  const paymentMethodsWidgetRef = useRef<ReturnType<PaymentWidgetInstance["renderPaymentMethods"]> | null>(null);
+  const paymentWidgetRef = useRef<any>(null);
+  const [isUsingMock, setIsUsingMock] = useState(false);
+  const [showTossWidget, setShowTossWidget] = useState(false);
 
   // 이벤트 데이터 및 사용자 정보 로드
   useEffect(() => {
@@ -51,7 +52,9 @@ export default function PaymentPage() {
       try {
         // 사용자 데이터 로드
         const pendingUserData = sessionStorage.getItem("pendingUser");
-        const parsedUserData = pendingUserData ? JSON.parse(pendingUserData) : null;
+        const parsedUserData = pendingUserData
+          ? JSON.parse(pendingUserData)
+          : null;
 
         if (!parsedUserData) {
           router.push("/auth");
@@ -89,38 +92,43 @@ export default function PaymentPage() {
     loadData();
   }, [router]);
 
-  // 토스 페이먼츠 위젯 초기화
+  // 위젯 타입 결정
   useEffect(() => {
     if (!paymentInfo || !userData) return;
 
-    const initializeWidget = async () => {
-      try {
-        // 고객 키 생성 (카카오 ID 기반)
-        const customerKey = `customer_${userData.kakaoId}`;
+    const useMock = shouldUseMockPayment();
+    setIsUsingMock(useMock);
 
-        // 결제 위젯 로드
-        const paymentWidget = await loadPaymentWidget(TOSS_CLIENT_KEY, customerKey);
-        paymentWidgetRef.current = paymentWidget;
+    if (useMock) {
+      // 모의 결제 위젯 초기화
+      const initMockWidget = async () => {
+        try {
+          const customerKey = `customer_${userData.kakaoId}`;
+          const mockWidget = await loadMockPaymentWidget(TOSS_CLIENT_KEY, customerKey);
+          paymentWidgetRef.current = mockWidget;
 
-        // 결제 수단 위젯 렌더링
-        const paymentMethodsWidget = paymentWidget.renderPaymentMethods(
-          "#payment-methods",
-          { value: paymentInfo.amount },
-          { variantKey: "DEFAULT" }
-        );
-        paymentMethodsWidgetRef.current = paymentMethodsWidget;
+          // DOM이 준비될 때까지 기다린 후 렌더링
+          setTimeout(() => {
+            try {
+              mockWidget.renderPaymentMethods("#mock-payment-methods", { value: paymentInfo.amount });
+              mockWidget.renderAgreement("#mock-agreement");
+              setWidgetReady(true);
+            } catch (error) {
+              console.error("Mock widget render error:", error);
+              setError("모의 결제 위젯을 렌더링할 수 없습니다.");
+            }
+          }, 500);
+        } catch (error) {
+          console.error("Mock widget init error:", error);
+          setError("모의 결제 위젯을 초기화할 수 없습니다.");
+        }
+      };
 
-        // 약관 동의 위젯 렌더링
-        paymentWidget.renderAgreement("#agreement", { variantKey: "AGREEMENT" });
-
-        setWidgetReady(true);
-      } catch (error) {
-        console.error("Failed to initialize payment widget:", error);
-        setError("결제 위젯을 초기화할 수 없습니다.");
-      }
-    };
-
-    initializeWidget();
+      initMockWidget();
+    } else {
+      // 실제 Toss 위젯 사용
+      setShowTossWidget(true);
+    }
   }, [paymentInfo, userData]);
 
   const handleGoBack = () => {
@@ -140,22 +148,54 @@ export default function PaymentPage() {
       const orderId = generateOrderId();
 
       // 결제 정보를 세션 스토리지에 저장 (성공 페이지에서 사용)
-      sessionStorage.setItem("paymentOrder", JSON.stringify({
-        orderId,
-        amount: paymentInfo.amount,
-        orderName: paymentInfo.eventName,
-        userData,
-      }));
+      sessionStorage.setItem(
+        "paymentOrder",
+        JSON.stringify({
+          orderId,
+          amount: paymentInfo.amount,
+          orderName: paymentInfo.eventName,
+          userData,
+        })
+      );
 
-      // 토스페이먼츠 결제 요청
-      await paymentWidgetRef.current.requestPayment({
-        orderId,
-        orderName: paymentInfo.eventName,
-        customerName: userData.name,
-        customerMobilePhone: userData.phoneNumber.replace(/-/g, ""),
-        successUrl: `${window.location.origin}/payment/success`,
-        failUrl: `${window.location.origin}/payment/fail`,
-      });
+      // 토스페이먼츠 결제 요청 (공식 예제 방식)
+      if (isUsingMock) {
+        // 모의 결제는 amount 파라미터 필요
+        await paymentWidgetRef.current.requestPayment({
+          orderId,
+          orderName: paymentInfo.eventName,
+          customerName: userData.name,
+          customerMobilePhone: userData.phoneNumber.replace(/[^0-9]/g, ""),
+          successUrl: `${window.location.origin}/payment/success`,
+          failUrl: `${window.location.origin}/payment/fail`,
+          amount: paymentInfo.amount,
+        });
+      } else {
+        // 공식 예제와 동일한 방식
+        console.log("🚀 Requesting payment with widgets:", paymentWidgetRef.current);
+
+        // 전화번호 정규화 및 검증
+        let cleanPhoneNumber = userData.phoneNumber.replace(/[^0-9]/g, "");
+
+        // 전화번호 길이 검증 (한국 휴대폰: 11자리)
+        if (cleanPhoneNumber.length < 10 || cleanPhoneNumber.length > 11) {
+          console.warn("📱 Invalid phone length:", cleanPhoneNumber);
+          // 기본값으로 설정 (테스트용)
+          cleanPhoneNumber = "01012341234";
+        }
+
+        console.log("📱 Original phone:", userData.phoneNumber, "→ Clean:", cleanPhoneNumber);
+
+        await paymentWidgetRef.current.requestPayment({
+          orderId: orderId,
+          orderName: paymentInfo.eventName,
+          successUrl: `${window.location.origin}/payment/success`,
+          failUrl: `${window.location.origin}/payment/fail`,
+          customerEmail: "customer@example.com", // 공식 예제처럼 추가
+          customerName: userData.name,
+          customerMobilePhone: cleanPhoneNumber,
+        });
+      }
     } catch (error: any) {
       // 사용자가 결제를 취소한 경우
       if (error.code === "USER_CANCEL") {
@@ -197,6 +237,17 @@ export default function PaymentPage() {
   return (
     <AppLayout title="참가비 결제" showBackButton onBack={handleGoBack}>
       <div className="space-y-6">
+        {/* Mock 모드 알림 */}
+        {isUsingMock && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-center space-x-2 text-amber-800">
+              <span className="font-semibold">테스트 모드</span>
+            </div>
+            <p className="text-sm text-amber-700 mt-1">
+              Toss 승인 전까지 임의로 넣어둔 모의 결제입니다.
+            </p>
+          </div>
+        )}
         {/* 결제 정보 */}
         <Card>
           <CardHeader>
@@ -230,7 +281,7 @@ export default function PaymentPage() {
               </h4>
               <ul className="text-sm text-blue-700 space-y-1">
                 <li>• 이벤트 진행비</li>
-                <li>• 간단한 안주 및 주류</li>
+                {/* <li>• 간단한 안주 및 주류</li> */}
                 <li>• 서비스 이용료</li>
               </ul>
             </div>
@@ -238,27 +289,38 @@ export default function PaymentPage() {
         </Card>
 
         {/* 토스페이먼츠 결제 위젯 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>결제 수단 선택</CardTitle>
-            <CardDescription>
-              원하시는 결제 수단을 선택해주세요.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* 결제 수단 위젯 영역 */}
-            <div id="payment-methods" className="min-h-[300px]">
+        {isUsingMock ? (
+          // 모의 결제 위젯
+          <div key="mock-payment">
+            <div id="mock-payment-methods" className="min-h-[200px]">
               {!widgetReady && (
-                <div className="flex justify-center items-center h-[300px]">
-                  <LoadingSpinner size="md" text="결제 수단 로딩 중..." />
+                <div className="flex justify-center items-center h-[200px]">
+                  <LoadingSpinner size="md" text="모의 결제 로딩 중..." />
                 </div>
               )}
             </div>
-
-            {/* 약관 동의 위젯 영역 */}
-            <div id="agreement" />
-          </CardContent>
-        </Card>
+            <div id="mock-agreement" />
+          </div>
+        ) : showTossWidget && paymentInfo && userData ? (
+          // 실제 Toss 위젯 (공식 예제 방식)
+          <SimpleTossWidget
+            key={`simple-toss-${userData.kakaoId}-${paymentInfo.amount}`}
+            clientKey={TOSS_CLIENT_KEY}
+            customerKey={`customer_${userData.kakaoId}`}
+            amount={paymentInfo.amount}
+            onReady={() => setWidgetReady(true)}
+            onError={(error) => setError(error)}
+            onPaymentRequest={(widgets) => {
+              paymentWidgetRef.current = widgets;
+              console.log("🎯 Payment widgets ready for use");
+            }}
+          />
+        ) : (
+          // 로딩 상태
+          <div className="flex justify-center items-center h-[200px]">
+            <LoadingSpinner size="md" text="결제 위젯 준비 중..." />
+          </div>
+        )}
 
         {/* 결제 버튼 */}
         <Button
@@ -281,13 +343,13 @@ export default function PaymentPage() {
 
         {/* 결제 안내사항 */}
         <Card className="bg-gray-50">
-          <CardContent className="pt-4">
+          <CardContent className="pt-1">
             <div className="space-y-2 text-xs text-gray-600">
               <h4 className="font-bold text-sm text-gray-800 mb-2">
                 결제 안내사항
               </h4>
               <p>• 환불/취소는 이벤트 하루 전까지 가능해요.</p>
-              <p>• 계좌 입금 희망시: 국민 01027695861 (이중후)</p>
+              {/* <p>• 계좌 입금 희망시: 국민 01027695861 (이중후)</p> */}
               <p>• 다른 문의 사항들은 DM 주세요.</p>
             </div>
           </CardContent>

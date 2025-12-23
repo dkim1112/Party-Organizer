@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// 테스트용 시크릿 키 (실제 배포시 환경변수로 교체)
-const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || "test_gsk_docs_OaPz8L5KdmQXkzRz3y47BMw6";
+const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || "";
 
 // 토스페이먼츠 결제 승인 API URL
 const TOSS_CONFIRM_URL = "https://api.tosspayments.com/v1/payments/confirm";
@@ -63,6 +62,25 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    // 모의 결제 키인지 확인 (test_payment_ 로 시작하는 경우)
+    if (paymentKey.startsWith("test_payment_")) {
+      console.log("Mock payment confirmation:", { paymentKey, orderId, amount });
+
+      // 모의 결제 성공 응답 반환
+      return NextResponse.json({
+        success: true,
+        message: "모의 결제가 성공적으로 승인되었습니다.",
+        payment: {
+          paymentKey,
+          orderId,
+          status: "DONE",
+          amount,
+          method: "테스트카드",
+          approvedAt: new Date().toISOString(),
+        },
+      });
     }
 
     // Basic Auth 인코딩 (시크릿 키 + ":")
