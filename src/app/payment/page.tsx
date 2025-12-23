@@ -1,9 +1,8 @@
-// INCOMPLETE!!! (requires toss verification)
-
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { loadPaymentWidget, PaymentWidgetInstance } from "@tosspayments/payment-widget-sdk";
 import AppLayout from "@/components/layout/AppLayout";
 import {
   Card,
@@ -14,6 +13,10 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
+import { generateOrderId } from "@/lib/payment";
+
+// 테스트용 클라이언트 키 (실제 배포시 환경변수로 교체)
+const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
 
 interface PaymentInfo {
   amount: number;
@@ -22,16 +25,42 @@ interface PaymentInfo {
   participantFee: number;
 }
 
+interface UserData {
+  kakaoId: string;
+  name: string;
+  phoneNumber: string;
+  gender: string;
+  age: string;
+}
+
 export default function PaymentPage() {
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [loadingData, setLoadingData] = useState(true);
+  const [widgetReady, setWidgetReady] = useState(false);
   const router = useRouter();
 
+  const paymentWidgetRef = useRef<PaymentWidgetInstance | null>(null);
+  const paymentMethodsWidgetRef = useRef<ReturnType<PaymentWidgetInstance["renderPaymentMethods"]> | null>(null);
+
+  // 이벤트 데이터 및 사용자 정보 로드
   useEffect(() => {
-    const loadEventData = async () => {
+    const loadData = async () => {
       try {
+        // 사용자 데이터 로드
+        const pendingUserData = sessionStorage.getItem("pendingUser");
+        const parsedUserData = pendingUserData ? JSON.parse(pendingUserData) : null;
+
+        if (!parsedUserData) {
+          router.push("/auth");
+          return;
+        }
+
+        setUserData(parsedUserData);
+
+        // 이벤트 데이터 로드
         const { getCurrentEvent } = await import("@/lib/firestore");
         const currentEvent = await getCurrentEvent();
 
@@ -50,110 +79,91 @@ export default function PaymentPage() {
           participantFee: currentEvent.price,
         });
       } catch (error) {
-        console.error("Failed to load event data:", error);
-        setError("이벤트 정보를 불러올 수 없습니다.");
+        console.error("Failed to load data:", error);
+        setError("데이터를 불러올 수 없습니다.");
       } finally {
         setLoadingData(false);
       }
     };
 
-    loadEventData();
-  }, []);
+    loadData();
+  }, [router]);
+
+  // 토스 페이먼츠 위젯 초기화
+  useEffect(() => {
+    if (!paymentInfo || !userData) return;
+
+    const initializeWidget = async () => {
+      try {
+        // 고객 키 생성 (카카오 ID 기반)
+        const customerKey = `customer_${userData.kakaoId}`;
+
+        // 결제 위젯 로드
+        const paymentWidget = await loadPaymentWidget(TOSS_CLIENT_KEY, customerKey);
+        paymentWidgetRef.current = paymentWidget;
+
+        // 결제 수단 위젯 렌더링
+        const paymentMethodsWidget = paymentWidget.renderPaymentMethods(
+          "#payment-methods",
+          { value: paymentInfo.amount },
+          { variantKey: "DEFAULT" }
+        );
+        paymentMethodsWidgetRef.current = paymentMethodsWidget;
+
+        // 약관 동의 위젯 렌더링
+        paymentWidget.renderAgreement("#agreement", { variantKey: "AGREEMENT" });
+
+        setWidgetReady(true);
+      } catch (error) {
+        console.error("Failed to initialize payment widget:", error);
+        setError("결제 위젯을 초기화할 수 없습니다.");
+      }
+    };
+
+    initializeWidget();
+  }, [paymentInfo, userData]);
 
   const handleGoBack = () => {
     router.back();
   };
 
   const handlePayment = async () => {
-    if (!paymentInfo) return;
-
-    setIsLoading(true);
-    setError("");
-
-    try {
-      // Get user data from session storage
-      const pendingUserData = sessionStorage.getItem("pendingUser");
-      const userData = pendingUserData ? JSON.parse(pendingUserData) : null;
-
-      if (!userData) {
-        throw new Error("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
-      }
-
-      // Mock payment processing delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Always succeed for development
-      const paymentId = `mock_payment_${Date.now()}`;
-
-      console.log("💳 Mock payment completed:", {
-        paymentId,
-        amount: paymentInfo.amount,
-        userData: userData.name,
-      });
-
-      // Create user and registration after successful payment
-      const { createUser, createRegistration, getCurrentEvent } = await import(
-        "@/lib/firestore"
-      );
-
-      console.log("👤 Creating user in Firestore...");
-      const userId = await createUser({
-        kakaoId: userData.kakaoId,
-        name: userData.name,
-        phoneNumber: userData.phoneNumber,
-        gender: userData.gender as "male" | "female",
-        age: parseInt(userData.age),
-      });
-
-      console.log("✅ User created with ID:", userId);
-
-      // Get current event for registration
-      const currentEvent = await getCurrentEvent();
-      if (!currentEvent) {
-        throw new Error("활성 이벤트를 찾을 수 없습니다");
-      }
-
-      console.log("📅 Creating registration...");
-      await createRegistration({
-        userId,
-        eventId: currentEvent.id,
-        paymentStatus: "completed",
-        paymentId,
-        questionnaireAnswers: {}, // Empty for now
-      });
-
-      console.log("✅ Registration created successfully");
-
-      // Store payment success info
-      sessionStorage.setItem(
-        "paymentResult",
-        JSON.stringify({
-          success: true,
-          paymentId: paymentId,
-          amount: paymentInfo.amount,
-          userData,
-        })
-      );
-
-      router.push("/dashboard");
-    } catch (err: any) {
-      setError(
-        err.message || "결제 처리 중 오류가 발생했습니다. 다시 시도해주세요."
-      );
-    } finally {
-      setIsLoading(false);
+    if (!paymentWidgetRef.current || !paymentInfo || !userData) {
+      setError("결제 정보를 불러올 수 없습니다.");
+      return;
     }
-  };
 
-  const handleKakaoPayment = async () => {
     setIsLoading(true);
     setError("");
 
     try {
-      // Use same payment logic as Toss Pay for now
-      await handlePayment();
-    } catch (err) {
-      setError("결제 처리 중 오류가 발생했습니다. 다시 시도해주세요.");
+      const orderId = generateOrderId();
+
+      // 결제 정보를 세션 스토리지에 저장 (성공 페이지에서 사용)
+      sessionStorage.setItem("paymentOrder", JSON.stringify({
+        orderId,
+        amount: paymentInfo.amount,
+        orderName: paymentInfo.eventName,
+        userData,
+      }));
+
+      // 토스페이먼츠 결제 요청
+      await paymentWidgetRef.current.requestPayment({
+        orderId,
+        orderName: paymentInfo.eventName,
+        customerName: userData.name,
+        customerMobilePhone: userData.phoneNumber.replace(/-/g, ""),
+        successUrl: `${window.location.origin}/payment/success`,
+        failUrl: `${window.location.origin}/payment/fail`,
+      });
+    } catch (error: any) {
+      // 사용자가 결제를 취소한 경우
+      if (error.code === "USER_CANCEL") {
+        setError("결제가 취소되었습니다.");
+      } else {
+        console.error("Payment error:", error);
+        setError(error.message || "결제 처리 중 오류가 발생했습니다.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -163,18 +173,18 @@ export default function PaymentPage() {
     return (
       <AppLayout title="참가비 결제" showBackButton onBack={handleGoBack}>
         <div className="flex justify-center items-center h-64">
-          <LoadingSpinner size="lg" text="이벤트 정보를 불러오는 중..." />
+          <LoadingSpinner size="lg" text="결제 정보를 불러오는 중..." />
         </div>
       </AppLayout>
     );
   }
 
-  if (!paymentInfo) {
+  if (!paymentInfo || !userData) {
     return (
       <AppLayout title="참가비 결제" showBackButton onBack={handleGoBack}>
         <div className="text-center space-y-4">
           <p className="text-red-600">
-            {error || "이벤트 정보를 불러올 수 없습니다."}
+            {error || "결제 정보를 불러올 수 없습니다."}
           </p>
           <Button onClick={handleGoBack} variant="outline">
             돌아가기
@@ -187,7 +197,7 @@ export default function PaymentPage() {
   return (
     <AppLayout title="참가비 결제" showBackButton onBack={handleGoBack}>
       <div className="space-y-6">
-        {/* Payment Info */}
+        {/* 결제 정보 */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -221,80 +231,47 @@ export default function PaymentPage() {
               <ul className="text-sm text-blue-700 space-y-1">
                 <li>• 이벤트 진행비</li>
                 <li>• 간단한 안주 및 주류</li>
-                <li>• 서비스 이용료 </li>
+                <li>• 서비스 이용료</li>
               </ul>
             </div>
           </CardContent>
         </Card>
 
-        {/* Payment Methods */}
+        {/* 토스페이먼츠 결제 위젯 */}
         <Card>
           <CardHeader>
-            <CardTitle>결제 방법 선택</CardTitle>
-            <CardDescription>편리한 결제 방법을 선택해주세요.</CardDescription>
+            <CardTitle>결제 수단 선택</CardTitle>
+            <CardDescription>
+              원하시는 결제 수단을 선택해주세요.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {/* Toss Pay */}
-            <Button
-              onClick={handlePayment}
-              disabled={isLoading}
-              className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-medium"
-            >
-              <div className="flex items-center justify-center space-x-3">
-                {isLoading ? (
-                  <LoadingSpinner size="sm" />
-                ) : (
-                  <>
-                    <div className="bg-white text-blue-600 px-3 py-1 rounded text-sm font-bold">
-                      toss
-                    </div>
-                    <span>토스페이 결제</span>
-                  </>
-                )}
-              </div>
-            </Button>
-
-            {/* Kakao Pay */}
-            <Button
-              onClick={handleKakaoPayment}
-              disabled={isLoading}
-              variant="outline"
-              className="w-full h-14 border-yellow-300 bg-yellow-50 hover:bg-yellow-100 text-gray-800"
-            >
-              <div className="flex items-center justify-center space-x-3">
-                <div className="w-6 h-6 bg-yellow-400 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-bold">K</span>
+          <CardContent className="space-y-4">
+            {/* 결제 수단 위젯 영역 */}
+            <div id="payment-methods" className="min-h-[300px]">
+              {!widgetReady && (
+                <div className="flex justify-center items-center h-[300px]">
+                  <LoadingSpinner size="md" text="결제 수단 로딩 중..." />
                 </div>
-                <span className="font-medium">카카오페이</span>
-              </div>
-            </Button>
+              )}
+            </div>
 
-            {/* Card Payment */}
-            <Button
-              onClick={handlePayment}
-              disabled={isLoading}
-              variant="outline"
-              className="w-full h-14"
-            >
-              <div className="flex items-center justify-center space-x-3">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                  />
-                </svg>
-                <span>신용카드 / 체크카드</span>
-              </div>
-            </Button>
+            {/* 약관 동의 위젯 영역 */}
+            <div id="agreement" />
           </CardContent>
         </Card>
+
+        {/* 결제 버튼 */}
+        <Button
+          onClick={handlePayment}
+          disabled={isLoading || !widgetReady}
+          className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-medium text-lg"
+        >
+          {isLoading ? (
+            <LoadingSpinner size="sm" />
+          ) : (
+            `${paymentInfo.amount.toLocaleString()}원 결제하기`
+          )}
+        </Button>
 
         {error && (
           <div className="text-sm text-red-600 bg-red-50 p-4 rounded-md">
@@ -302,14 +279,14 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {/* Payment Info */}
+        {/* 결제 안내사항 */}
         <Card className="bg-gray-50">
-          <CardContent className="pt-2">
+          <CardContent className="pt-4">
             <div className="space-y-2 text-xs text-gray-600">
               <h4 className="font-bold text-sm text-gray-800 mb-2">
                 결제 안내사항
               </h4>
-              <p>• 환불취소는 이벤트 하루 전까지 가능해요.</p>
+              <p>• 환불/취소는 이벤트 하루 전까지 가능해요.</p>
               <p>• 계좌 입금 희망시: 국민 01027695861 (이중후)</p>
               <p>• 다른 문의 사항들은 DM 주세요.</p>
             </div>

@@ -1,10 +1,12 @@
 import React from "react";
+import Footer from "./Footer";
 
 interface AppLayoutProps {
   children: React.ReactNode;
   title?: string;
   showBackButton?: boolean;
   onBack?: () => void;
+  hideFooter?: boolean;
 }
 
 export default function AppLayout({
@@ -12,9 +14,10 @@ export default function AppLayout({
   title,
   showBackButton = false,
   onBack,
+  hideFooter = false,
 }: AppLayoutProps) {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-md mx-auto px-4 py-4 flex items-center justify-between">
@@ -48,7 +51,12 @@ export default function AppLayout({
       </header>
 
       {/* Main Content */}
-      <main className="max-w-md mx-auto px-4 py-6">{children}</main>
+      <main className="flex-1">
+        <div className="max-w-md mx-auto px-4 py-6">{children}</div>
+      </main>
+
+      {/* Footer */}
+      {!hideFooter && <Footer />}
     </div>
   );
 }

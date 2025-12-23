@@ -14,6 +14,8 @@
     "@radix-ui/react-radio-group": "^1.3.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@tosspayments/payment-sdk": "^1.9.2",
+    "@tosspayments/payment-widget-sdk": "^0.12.1",
+    "@tosspayments/tosspayments-sdk": "^2.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "firebase": "^12.6.0",
