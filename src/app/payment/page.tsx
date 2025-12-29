@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { loadMockPaymentWidget, shouldUseMockPayment } from "@/lib/mockPayment";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import SimpleTossWidget from "@/components/payment/SimpleTossWidget";
 import AppLayout from "@/components/layout/AppLayout";
 import {
@@ -33,18 +32,18 @@ interface UserData {
   age: string;
 }
 
-export default function PaymentPage() {
+function PaymentPageContent() {
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [loadingData, setLoadingData] = useState(true);
   const [widgetReady, setWidgetReady] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const paymentWidgetRef = useRef<any>(null);
-  const [isUsingMock, setIsUsingMock] = useState(false);
-  const [showTossWidget, setShowTossWidget] = useState(false);
 
   // 이벤트 데이터 및 사용자 정보 로드
   useEffect(() => {
@@ -92,47 +91,32 @@ export default function PaymentPage() {
     loadData();
   }, [router]);
 
-  // 위젯 타입 결정
+  // Check for refund parameter in URL
   useEffect(() => {
-    if (!paymentInfo || !userData) return;
-
-    const useMock = shouldUseMockPayment();
-    setIsUsingMock(useMock);
-
-    if (useMock) {
-      // 모의 결제 위젯 초기화
-      const initMockWidget = async () => {
-        try {
-          const customerKey = `customer_${userData.kakaoId}`;
-          const mockWidget = await loadMockPaymentWidget(TOSS_CLIENT_KEY, customerKey);
-          paymentWidgetRef.current = mockWidget;
-
-          // DOM이 준비될 때까지 기다린 후 렌더링
-          setTimeout(() => {
-            try {
-              mockWidget.renderPaymentMethods("#mock-payment-methods", { value: paymentInfo.amount });
-              mockWidget.renderAgreement("#mock-agreement");
-              setWidgetReady(true);
-            } catch (error) {
-              console.error("Mock widget render error:", error);
-              setError("모의 결제 위젯을 렌더링할 수 없습니다.");
-            }
-          }, 500);
-        } catch (error) {
-          console.error("Mock widget init error:", error);
-          setError("모의 결제 위젯을 초기화할 수 없습니다.");
-        }
-      };
-
-      initMockWidget();
-    } else {
-      // 실제 Toss 위젯 사용
-      setShowTossWidget(true);
+    const refundParam = searchParams.get("refund");
+    if (refundParam === "true") {
+      setShowRefundModal(true);
     }
-  }, [paymentInfo, userData]);
+  }, [searchParams]);
 
   const handleGoBack = () => {
     router.back();
+  };
+
+  const openRefundModal = () => {
+    setShowRefundModal(true);
+    // Update URL with refund parameter
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set("refund", "true");
+    window.history.pushState({}, "", newUrl.toString());
+  };
+
+  const closeRefundModal = () => {
+    setShowRefundModal(false);
+    // Remove refund parameter from URL
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.delete("refund");
+    window.history.pushState({}, "", newUrl.toString());
   };
 
   const handlePayment = async () => {
@@ -158,46 +142,25 @@ export default function PaymentPage() {
         })
       );
 
-      // 토스페이먼츠 결제 요청 (공식 예제 방식)
-      if (isUsingMock) {
-        // 모의 결제는 amount 파라미터 필요
-        await paymentWidgetRef.current.requestPayment({
-          orderId,
-          orderName: paymentInfo.eventName,
-          customerName: userData.name,
-          customerMobilePhone: userData.phoneNumber.replace(/[^0-9]/g, ""),
-          successUrl: `${window.location.origin}/payment/success`,
-          failUrl: `${window.location.origin}/payment/fail`,
-          amount: paymentInfo.amount,
-        });
-      } else {
-        // 공식 예제와 동일한 방식
-        console.log("🚀 Requesting payment with widgets:", paymentWidgetRef.current);
+      // 전화번호 정규화 및 검증
+      let cleanPhoneNumber = userData.phoneNumber.replace(/[^0-9]/g, "");
 
-        // 전화번호 정규화 및 검증
-        let cleanPhoneNumber = userData.phoneNumber.replace(/[^0-9]/g, "");
-
-        // 전화번호 길이 검증 (한국 휴대폰: 11자리)
-        if (cleanPhoneNumber.length < 10 || cleanPhoneNumber.length > 11) {
-          console.warn("📱 Invalid phone length:", cleanPhoneNumber);
-          // 기본값으로 설정 (테스트용)
-          cleanPhoneNumber = "01012341234";
-        }
-
-        console.log("📱 Original phone:", userData.phoneNumber, "→ Clean:", cleanPhoneNumber);
-
-        await paymentWidgetRef.current.requestPayment({
-          orderId: orderId,
-          orderName: paymentInfo.eventName,
-          successUrl: `${window.location.origin}/payment/success`,
-          failUrl: `${window.location.origin}/payment/fail`,
-          customerEmail: "customer@example.com", // 공식 예제처럼 추가
-          customerName: userData.name,
-          customerMobilePhone: cleanPhoneNumber,
-        });
+      // 전화번호 길이 검증 (한국 휴대폰: 11자리)
+      if (cleanPhoneNumber.length < 10 || cleanPhoneNumber.length > 11) {
+        console.warn("📱 Invalid phone length:", cleanPhoneNumber);
+        cleanPhoneNumber = "01012341234"; // 기본값으로 설정
       }
+
+      await paymentWidgetRef.current.requestPayment({
+        orderId: orderId,
+        orderName: paymentInfo.eventName,
+        successUrl: `${window.location.origin}/payment/success`,
+        failUrl: `${window.location.origin}/payment/fail`,
+        customerEmail: "customer@example.com",
+        customerName: userData.name,
+        customerMobilePhone: cleanPhoneNumber,
+      });
     } catch (error: any) {
-      // 사용자가 결제를 취소한 경우
       if (error.code === "USER_CANCEL") {
         setError("결제가 취소되었습니다.");
       } else {
@@ -237,17 +200,6 @@ export default function PaymentPage() {
   return (
     <AppLayout title="참가비 결제" showBackButton onBack={handleGoBack}>
       <div className="space-y-6">
-        {/* Mock 모드 알림 */}
-        {isUsingMock && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-amber-800">
-              <span className="font-semibold">테스트 모드</span>
-            </div>
-            <p className="text-sm text-amber-700 mt-1">
-              Toss 승인 전까지 임의로 넣어둔 모의 결제입니다.
-            </p>
-          </div>
-        )}
         {/* 결제 정보 */}
         <Card>
           <CardHeader>
@@ -288,21 +240,32 @@ export default function PaymentPage() {
           </CardContent>
         </Card>
 
-        {/* 토스페이먼츠 결제 위젯 */}
-        {isUsingMock ? (
-          // 모의 결제 위젯
-          <div key="mock-payment">
-            <div id="mock-payment-methods" className="min-h-[200px]">
-              {!widgetReady && (
-                <div className="flex justify-center items-center h-[200px]">
-                  <LoadingSpinner size="md" text="모의 결제 로딩 중..." />
-                </div>
-              )}
+        {/* 결제 안내사항 */}
+        <Card className="bg-gray-50">
+          <CardContent className="pt-1">
+            <div className="space-y-2 text-xs text-gray-600">
+              <h4 className="font-bold text-xl text-gray-800 mb-4">
+                결제 안내사항
+              </h4>
+              <div className="flex items-center space-x-1">
+                <span>•</span>
+                <button
+                  onClick={openRefundModal}
+                  className="text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                >
+                  자세한 환불 규정은 여기서 확인해주세요.
+                </button>
+              </div>
+              <p>
+                • 상품 유효 기간은 결제 시점과 무관한, 이벤트 종료 시점이에요.
+              </p>
+              <p>• 기타 문의 사항은 DM 주세요.</p>
             </div>
-            <div id="mock-agreement" />
-          </div>
-        ) : showTossWidget && paymentInfo && userData ? (
-          // 실제 Toss 위젯 (공식 예제 방식)
+          </CardContent>
+        </Card>
+
+        {/* 토스페이먼츠 결제 위젯 */}
+        {paymentInfo && userData ? (
           <SimpleTossWidget
             key={`simple-toss-${userData.kakaoId}-${paymentInfo.amount}`}
             clientKey={TOSS_CLIENT_KEY}
@@ -312,11 +275,9 @@ export default function PaymentPage() {
             onError={(error) => setError(error)}
             onPaymentRequest={(widgets) => {
               paymentWidgetRef.current = widgets;
-              console.log("🎯 Payment widgets ready for use");
             }}
           />
         ) : (
-          // 로딩 상태
           <div className="flex justify-center items-center h-[200px]">
             <LoadingSpinner size="md" text="결제 위젯 준비 중..." />
           </div>
@@ -341,20 +302,113 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {/* 결제 안내사항 */}
-        <Card className="bg-gray-50">
-          <CardContent className="pt-1">
-            <div className="space-y-2 text-xs text-gray-600">
-              <h4 className="font-bold text-sm text-gray-800 mb-2">
-                결제 안내사항
-              </h4>
-              <p>• 환불/취소는 이벤트 하루 전까지 가능해요.</p>
-              {/* <p>• 계좌 입금 희망시: 국민 01027695861 (이중후)</p> */}
-              <p>• 다른 문의 사항들은 DM 주세요.</p>
+        {/* 환불 정책 모달 */}
+        {showRefundModal && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeRefundModal}
+          >
+            <div
+              className="bg-white rounded-lg p-6 m-4 max-w-md w-full max-h-96 overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-800">환불 정책</h3>
+                <button
+                  onClick={closeRefundModal}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-3 text-sm text-gray-700">
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-3">
+                    환불 및 취소 규정
+                  </h4>
+                  <div className="space-y-6 text-sm">
+                    <div>
+                      <p className="font-medium mb-2">
+                        1. 예약 확정 후 당일 취소 및 노쇼(No-show)의 경우
+                      </p>
+                      <p className="text-gray-600 leading-relaxed">
+                        예약 확정 후 당일 취소 또는 사전 연락 없이
+                        미방문(No-show) 시에는, 어떠한 경우에도 환불이
+                        불가합니다.
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="font-medium mb-2">
+                        2. 방문일 기준 7일 이전 취소
+                      </p>
+                      <p className="text-gray-600 leading-relaxed">
+                        예약일 기준 7일 전까지 취소 요청 시 결제 금액의 100%를
+                        환불해드립니다.
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="font-medium mb-2">
+                        3. 방문일 기준 7일 이내 취소
+                      </p>
+                      <p className="text-gray-600 leading-relaxed mb-2">
+                        방문일을 기준으로 7일 이내에 취소하는 경우, 아래 기준에
+                        따라 환불이 제한됩니다.
+                      </p>
+                      <ul className="text-gray-600 space-y-1 ml-4">
+                        <li>• 방문 6 ~ 4일 전 취소: 결제 금액의 50% 환불</li>
+                        <li>• 방문 3 ~ 1일 전 취소: 결제 금액 환불 불가</li>
+                      </ul>
+                    </div>
+
+                    <div>
+                      <p className="font-medium mb-2">
+                        4. 매장 사정으로 인한 취소
+                      </p>
+                      <p className="text-gray-600 leading-relaxed">
+                        매장의 사정 (환불 처리 문제, 운영 불가 등)으로 예약이
+                        취소될 경우, 결제 금액 전액을 환불 해드립니다.
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="font-medium mb-2">5. 환불 처리 기간</p>
+                      <p className="text-gray-600 leading-relaxed">
+                        환불은 취소 확정일 기준 영업일 7~14일 이내 결제 수단에
+                        따라 처리됩니다. 결제 수단에 따라 실제 환불 시점은 다소
+                        차이가 있을 수 있습니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-800 mt-7 mb-2">
+                    환불 절차
+                  </h4>
+                  <ul className="space-y-2">
+                    <li>1. DM으로 환불 요청</li>
+                    <li>2. 페이지 내에서 취소 신청</li>
+                    <li>3. 환불 사유 확인</li>
+                    <li>4. 환불 승인 후 처리</li>
+                  </ul>
+                </div>
+                <div className="text-xs text-gray-500 mt-4 pt-3 border-t">
+                  본 정책은 2025년 12월 29일에 최신화 되었습니다.
+                </div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        )}
       </div>
     </AppLayout>
+  );
+}
+
+export default function PaymentPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <PaymentPageContent />
+    </Suspense>
   );
 }

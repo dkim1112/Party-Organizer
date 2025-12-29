@@ -64,24 +64,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 모의 결제 키인지 확인 (test_payment_ 로 시작하는 경우)
-    if (paymentKey.startsWith("test_payment_")) {
-      console.log("Mock payment confirmation:", { paymentKey, orderId, amount });
-
-      // 모의 결제 성공 응답 반환
-      return NextResponse.json({
-        success: true,
-        message: "모의 결제가 성공적으로 승인되었습니다.",
-        payment: {
-          paymentKey,
-          orderId,
-          status: "DONE",
-          amount,
-          method: "테스트카드",
-          approvedAt: new Date().toISOString(),
-        },
-      });
-    }
 
     // Basic Auth 인코딩 (시크릿 키 + ":")
     const encryptedSecretKey = Buffer.from(`${TOSS_SECRET_KEY}:`).toString("base64");

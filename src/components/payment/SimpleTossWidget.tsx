@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-// 전역 위젯 인스턴스 관리
-let globalWidgetInstance: any = null;
-let globalInitPromise: Promise<any> | null = null;
-let isGloballyInitializing = false;
+// Global state to prevent multiple initializations
+let isGlobalScriptLoading = false;
+let isGlobalScriptLoaded = false;
+let globalWidgetInstances = new Set();
 
 interface SimpleTossWidgetProps {
   clientKey: string;
@@ -26,146 +26,193 @@ export default function SimpleTossWidget({
 }: SimpleTossWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetsRef = useRef<any>(null);
-  const initRef = useRef(false);
-  const instanceId = useRef(`simple-${Date.now()}-${Math.random().toString(36).substring(2)}`);
+  const mountedRef = useRef(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  const instanceId = useRef(
+    `toss-widget-${Date.now()}-${Math.random().toString(36).substring(2)}`
+  );
 
   useEffect(() => {
-    if (initRef.current) return;
+    if (mountedRef.current) return;
+    mountedRef.current = true;
 
-    async function main() {
+    // First render the DOM elements
+    setIsInitialized(true);
+
+    // Then initialize the widget after a delay to ensure DOM is ready
+    const timeoutId = setTimeout(async () => {
+      if (!mountedRef.current) return;
+
       try {
-        initRef.current = true;
+        // Load TossPayments script
+        await loadTossScript();
 
-        // 전역 위젯이 이미 초기화 중이면 기다리기
-        if (isGloballyInitializing && globalInitPromise) {
-          console.log("⏳ Waiting for global widget initialization...");
-          const widgets = await globalInitPromise;
-          widgetsRef.current = widgets;
-          onPaymentRequest(widgets);
-          onReady();
-          return;
-        }
+        if (!mountedRef.current) return;
 
-        // 전역 위젯이 이미 존재하면 재사용
-        if (globalWidgetInstance) {
-          console.log("♻️ Reusing existing global widget");
+        const paymentSelector = `#payment-${instanceId.current}`;
+        const agreementSelector = `#agreement-${instanceId.current}`;
 
-          // 금액 업데이트
-          await globalWidgetInstance.setAmount({
-            currency: "KRW",
-            value: amount,
-          });
+        // Wait for DOM elements to exist
+        await waitForElements(paymentSelector, agreementSelector);
 
-          widgetsRef.current = globalWidgetInstance;
-          onPaymentRequest(globalWidgetInstance);
-          onReady();
-          return;
-        }
+        if (!mountedRef.current) return;
 
-        isGloballyInitializing = true;
+        // Clear existing content
+        const paymentEl = document.querySelector(paymentSelector);
+        const agreementEl = document.querySelector(agreementSelector);
+        if (paymentEl) paymentEl.innerHTML = "";
+        if (agreementEl) agreementEl.innerHTML = "";
 
-        // 새로운 전역 위젯 생성
-        globalInitPromise = (async () => {
-          // TossPayments 스크립트 로드 대기
-          const checkTossPayments = () => {
-            return new Promise<void>((resolve) => {
-              const check = () => {
-                if (typeof window !== 'undefined' && (window as any).TossPayments) {
-                  resolve();
-                } else {
-                  setTimeout(check, 50);
-                }
-              };
-              check();
-            });
-          };
+        // Initialize widgets
+        const tossPayments = (window as any).TossPayments(clientKey);
+        const widgets = tossPayments.widgets({ customerKey });
 
-          await checkTossPayments();
+        // Set amount
+        await widgets.setAmount({
+          currency: "KRW",
+          value: amount,
+        });
 
-          console.log("🚀 Initializing new global Toss widget");
+        if (!mountedRef.current) return;
 
-          // DOM 요소 정리
-          const paymentSelector = `#simple-payment-method-${instanceId.current}`;
-          const agreementSelector = `#simple-agreement-${instanceId.current}`;
+        // Render payment methods first
+        await widgets.renderPaymentMethods({
+          selector: paymentSelector,
+          variantKey: "DEFAULT",
+        });
 
-          const paymentEl = document.querySelector(paymentSelector);
-          const agreementEl = document.querySelector(agreementSelector);
-          if (paymentEl) paymentEl.innerHTML = "";
-          if (agreementEl) agreementEl.innerHTML = "";
+        if (!mountedRef.current) return;
 
-          // 위젯 초기화
-          const tossPayments = (window as any).TossPayments(clientKey);
-          const widgets = tossPayments.widgets({ customerKey });
+        // Render agreement
+        await widgets.renderAgreement({
+          selector: agreementSelector,
+          variantKey: "AGREEMENT",
+        });
 
-          // 금액 설정
-          await widgets.setAmount({
-            currency: "KRW",
-            value: amount,
-          });
-
-          console.log("✅ Amount set:", amount);
-
-          // 렌더링
-          await new Promise(resolve => setTimeout(resolve, 200));
-
-          await Promise.all([
-            widgets.renderPaymentMethods({
-              selector: paymentSelector,
-              variantKey: "DEFAULT",
-            }),
-            widgets.renderAgreement({
-              selector: agreementSelector,
-              variantKey: "AGREEMENT"
-            }),
-          ]);
-
-          console.log("✅ Global widget rendered successfully");
-
-          globalWidgetInstance = widgets;
-          isGloballyInitializing = false;
-          globalInitPromise = null;
-
-          return widgets;
-        })();
-
-        const widgets = await globalInitPromise;
+        globalWidgetInstances.add(instanceId.current);
         widgetsRef.current = widgets;
         onPaymentRequest(widgets);
         onReady();
-
       } catch (error: any) {
-        console.error("❌ Widget initialization failed:", error);
-        isGloballyInitializing = false;
-        globalInitPromise = null;
-        onError(error.message);
-        initRef.current = false;
+        console.error("Widget initialization failed:", error);
+        if (mountedRef.current) {
+          onError(error.message || "위젯 초기화에 실패했습니다.");
+        }
       }
-    }
-
-    main();
+    }, 100);
 
     return () => {
-      console.log("🧹 Cleaning up simple widget");
+      clearTimeout(timeoutId);
+      mountedRef.current = false;
+      globalWidgetInstances.delete(instanceId.current);
+
       try {
-        // 로컬 레퍼런스만 정리, 전역 인스턴스는 유지
+        const paymentSelector = `#payment-${instanceId.current}`;
+        const agreementSelector = `#agreement-${instanceId.current}`;
+
+        const paymentEl = document.querySelector(paymentSelector);
+        const agreementEl = document.querySelector(agreementSelector);
+        if (paymentEl) paymentEl.innerHTML = "";
+        if (agreementEl) agreementEl.innerHTML = "";
+
         widgetsRef.current = null;
-        initRef.current = false;
       } catch (e) {
         console.warn("Cleanup warning:", e);
       }
     };
-  }, [clientKey, customerKey, amount]);
+  }, []);
+
+  // Function to wait for DOM elements to exist
+  const waitForElements = (
+    paymentSelector: string,
+    agreementSelector: string
+  ): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const maxAttempts = 50; // 5 seconds max wait
+
+      const checkElements = () => {
+        attempts++;
+        const paymentEl = document.querySelector(paymentSelector);
+        const agreementEl = document.querySelector(agreementSelector);
+
+        if (paymentEl && agreementEl) {
+          resolve();
+        } else if (attempts >= maxAttempts) {
+          reject(
+            new Error(
+              `DOM elements not found: ${paymentSelector}, ${agreementSelector}`
+            )
+          );
+        } else {
+          setTimeout(checkElements, 100);
+        }
+      };
+
+      checkElements();
+    });
+  };
+
+  // Function to load TossPayments script
+  const loadTossScript = (): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      // Already loaded
+      if (isGlobalScriptLoaded && (window as any).TossPayments) {
+        resolve();
+        return;
+      }
+
+      // Currently loading
+      if (isGlobalScriptLoading) {
+        const checkLoaded = () => {
+          if (isGlobalScriptLoaded && (window as any).TossPayments) {
+            resolve();
+          } else {
+            setTimeout(checkLoaded, 100);
+          }
+        };
+        checkLoaded();
+        return;
+      }
+
+      // Start loading
+      isGlobalScriptLoading = true;
+
+      const existingScript = document.querySelector(
+        'script[src*="tosspayments.com"]'
+      );
+      if (existingScript) {
+        existingScript.remove();
+      }
+
+      const script = document.createElement("script");
+      script.src = "https://js.tosspayments.com/v2/standard";
+      script.async = true;
+      script.onload = () => {
+        isGlobalScriptLoaded = true;
+        isGlobalScriptLoading = false;
+        resolve();
+      };
+      script.onerror = () => {
+        isGlobalScriptLoading = false;
+        reject(new Error("TossPayments script load failed"));
+      };
+
+      document.head.appendChild(script);
+    });
+  };
 
   return (
     <div ref={containerRef} className="space-y-4">
       {/* 결제 UI */}
-      <div>
-        <div id={`simple-payment-method-${instanceId.current}`} className="min-h-[200px]"></div>
+      <div className="rounded-xl overflow-hidden shadow-sm">
+        <div id={`payment-${instanceId.current}`}></div>
       </div>
 
       {/* 이용약관 UI */}
-      <div>
-        <div id={`simple-agreement-${instanceId.current}`}></div>
+      <div className="rounded-xl overflow-hidden shadow-sm">
+        <div id={`agreement-${instanceId.current}`}></div>
       </div>
     </div>
   );

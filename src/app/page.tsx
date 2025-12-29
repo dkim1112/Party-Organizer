@@ -43,7 +43,7 @@ export default function Home() {
   };
 
   return (
-    <AppLayout title="🎉 꺄르륵 파티 🎉">
+    <AppLayout title="꺄르륵 파티">
       <div className="space-y-6">
         {/* Welcome Message */}
         <div className="text-center space-y-2">
@@ -70,8 +70,7 @@ export default function Home() {
                 <Input
                   id="password"
                   type="password"
-                  // placeholder="비번은 [연림]에서 확인이 가능해요."
-                  placeholder="dongeun (입력하시면 됩니다)"
+                  placeholder="비번은 [연림]에서 확인이 가능해요."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
@@ -98,7 +97,7 @@ export default function Home() {
 
         {/* Info */}
         <div className="text-center text-sm text-gray-500">
-          <p>🍻 "오늘이 지나면 우리 사이, 달라질 거야" 🍻</p>
+          <p>🍻 &quot;오늘이 지나면 우리 사이, 달라질 거야&quot; 🍻</p>
           <p className="mt-1">문의사항: DM - yeonrim_bar</p>
         </div>
       </div>

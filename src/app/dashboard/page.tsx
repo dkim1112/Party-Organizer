@@ -238,7 +238,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <AppLayout title="🎉 꺄르륵 파티 🎉">
+    <AppLayout title="꺄르륵 파티">
       <div className="space-y-6">
         {/* Welcome Message */}
         <div className="text-center space-y-2">
@@ -362,14 +362,14 @@ export default function DashboardPage() {
                 <CardTitle>📋 참가 수칙</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2">
+                <ul className="space-y-1">
                   {eventInfo.rules.map((rule, index) => (
                     <li
                       key={index}
                       className="flex items-start space-x-2 text-gray-700"
                     >
-                      <span className="text-purple-600 mt-1">•</span>
-                      <span className="text-sm">{rule}</span>
+                      <span className="text-purple-600">•</span>
+                      <span className="text-md">{rule}</span>
                     </li>
                   ))}
                 </ul>
@@ -385,7 +385,7 @@ export default function DashboardPage() {
                     <span>주류 라인업</span>
                   </CardTitle>
                   <CardDescription className="text-orange-700">
-                    당일 제공되는 것들이에요 (마음속으로 택1).
+                    당일 제공되는 것들이에요 (미리 마음속으로 택1).
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -490,14 +490,15 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle className="text-red-700">⚠️ 참가 취소</CardTitle>
                 <CardDescription className="text-red-600">
-                  취소 정책을 꼼꼼히 확인 후 결정해주세요.
+                  환불/취소 정책을 꼼꼼히 확인 후 결정해주세요.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="bg-red-50 p-3 rounded-md text-xs text-red-700">
                   <ul className="space-y-1">
-                    <li>• 이벤트 하루 전까지: 100% 환불</li>
-                    <li>• 이벤트 당일: 환불 불가</li>
+                    <li>• 방문일 기준 7일 전: 100% 환불</li>
+                    <li>• 방문일 기준 6 ~ 4일 전: 50% 환불</li>
+                    <li>• 방문일 기준 3 ~ 1일 전: 환불 불가</li>
                   </ul>
                 </div>
                 <Button

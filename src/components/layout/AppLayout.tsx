@@ -43,7 +43,7 @@ export default function AppLayout({
           )}
 
           <h1 className="text-xl font-bold text-center flex-1">
-            {title || "🎉 꺄르륵 파티 🎉"}
+            {title || "꺄르륵 파티"}
           </h1>
 
           {showBackButton && <div className="w-10" />}

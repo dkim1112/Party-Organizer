@@ -18,11 +18,11 @@ export default function Footer() {
             행운1길 56 지하1층 연림
           </p>
           <p>
-            <span className="text-gray-600">전화번호:</span> 010-4013-5771
+            <span className="text-gray-600">연락처:</span> 010-4013-5771
           </p>
           <div className="border-t border-gray-200 mt-3 pt-3">
             <p className="text-gray-400">
-              Copyright 2025. 연림. All rights reserved.
+              Copyright 2026. 연림. All rights reserved.
             </p>
           </div>
         </div>
