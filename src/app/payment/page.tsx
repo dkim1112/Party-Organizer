@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SimpleTossWidget from "@/components/payment/SimpleTossWidget";
 import AppLayout from "@/components/layout/AppLayout";
@@ -32,7 +32,7 @@ interface UserData {
   age: string;
 }
 
-function PaymentPageContent() {
+export default function PaymentPage() {
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -343,7 +343,7 @@ function PaymentPageContent() {
                         2. 방문일 기준 7일 이전 취소
                       </p>
                       <p className="text-gray-600 leading-relaxed">
-                        예약일 기준 7일 전까지 취소 요청 시 결제 금액의 100%를
+                        방문일 기준 7일 전까지 취소 요청 시 결제 금액의 100%를
                         환불해드립니다.
                       </p>
                     </div>
@@ -402,13 +402,5 @@ function PaymentPageContent() {
         )}
       </div>
     </AppLayout>
-  );
-}
-
-export default function PaymentPage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <PaymentPageContent />
-    </Suspense>
   );
 }
