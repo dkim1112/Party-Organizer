@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SimpleTossWidget from "@/components/payment/SimpleTossWidget";
 import AppLayout from "@/components/layout/AppLayout";
@@ -32,7 +32,7 @@ interface UserData {
   age: string;
 }
 
-export default function PaymentPage() {
+function PaymentPageContent() {
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -402,5 +402,21 @@ export default function PaymentPage() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+export default function PaymentPage() {
+  return (
+    <Suspense
+      fallback={
+        <AppLayout title="참가비 결제" showBackButton>
+          <div className="flex justify-center items-center h-64">
+            <LoadingSpinner size="lg" text="로딩 중..." />
+          </div>
+        </AppLayout>
+      }
+    >
+      <PaymentPageContent />
+    </Suspense>
   );
 }
