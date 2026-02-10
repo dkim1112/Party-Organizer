@@ -23,6 +23,8 @@ import {
   MenuItem,
   Question,
   QuestionnaireAnswers,
+  PendingRegistration,
+  BankTransferInfo,
 } from "@/types";
 
 // Collections
@@ -174,54 +176,30 @@ export const createEvent = async (
 
 // Registration operations
 export const createRegistration = async (
-  registrationData: Omit<Registration, "id" | "registeredAt" | "updatedAt">
+  registrationData: Omit<
+    Registration,
+    "id" | "registeredAt" | "updatedAt" | "submittedAt"
+  >
 ) => {
   try {
-    // Start a batch write to update both registration and event
+    // Create registration with pending approval status
     const registrationDoc = await addDoc(
       collection(db, REGISTRATIONS_COLLECTION),
       {
         ...registrationData,
+        approvalStatus: "pending", // 기본값으로 pending 설정
+        submittedAt: serverTimestamp(), // 대기열 순서를 위한 제출 시간
         registeredAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }
     );
-    // Update event participant count
-    const user = await getUserById(registrationData.userId);
 
-    if (!user) {
-      console.error("❌ User not found:", registrationData.userId);
-      throw new Error("사용자 정보를 찾을 수 없습니다");
-    }
-
-    const eventRef = doc(db, EVENTS_COLLECTION, registrationData.eventId);
-    const incrementField = user.gender === "male" ? "maleCount" : "femaleCount";
-
-    // Get current event data first
-    const currentEventDoc = await getDoc(eventRef);
-
-    if (!currentEventDoc.exists()) {
-      console.error("❌ Event not found:", registrationData.eventId);
-      throw new Error("이벤트를 찾을 수 없습니다");
-    }
-
-    const currentEventData = currentEventDoc.data();
-    const currentParticipants = currentEventData?.participants || [];
-
-    // Check if user is already in participants to prevent duplicates
-    if (currentParticipants.includes(user.id)) {
-      return registrationDoc.id;
-    }
-
-    await updateDoc(eventRef, {
-      [incrementField]: increment(1),
-      participants: [...currentParticipants, user.id],
-      updatedAt: serverTimestamp(),
-    });
+    // NOTE: Event participant count는 관리자 승인 후에만 업데이트됨
+    // 승인 대기 중일 때는 event participant count를 증가시키지 않음
 
     return registrationDoc.id;
   } catch (error) {
-    console.error("❌ Error creating registration:", error);
+    console.error("Error creating registration:", error);
     throw error;
   }
 };
@@ -250,20 +228,105 @@ export const getRegistrationByUser = async (
   }
 };
 
-export const updateRegistrationPayment = async (
-  registrationId: string,
-  paymentStatus: "completed" | "failed",
-  paymentId?: string
-) => {
+// 관리자 승인/거부 처리
+export const approveRegistration = async (registrationId: string) => {
   try {
+    // Get registration details first
+    const regDoc = await getDoc(
+      doc(db, REGISTRATIONS_COLLECTION, registrationId)
+    );
+    if (!regDoc.exists()) {
+      throw new Error("등록 정보를 찾을 수 없습니다");
+    }
+
+    const registration = regDoc.data() as Registration;
+    const user = await getUserById(registration.userId);
+
+    if (!user) {
+      throw new Error("사용자 정보를 찾을 수 없습니다");
+    }
+
+    // Update registration status
     const regRef = doc(db, REGISTRATIONS_COLLECTION, registrationId);
     await updateDoc(regRef, {
-      paymentStatus,
-      paymentId: paymentId || null,
+      approvalStatus: "approved",
+      paymentStatus: "completed",
       updatedAt: serverTimestamp(),
     });
+
+    // Now update event participant count
+    const eventRef = doc(db, EVENTS_COLLECTION, registration.eventId);
+    const incrementField = user.gender === "male" ? "maleCount" : "femaleCount";
+
+    const currentEventDoc = await getDoc(eventRef);
+    if (!currentEventDoc.exists()) {
+      throw new Error("이벤트를 찾을 수 없습니다");
+    }
+
+    const currentEventData = currentEventDoc.data();
+    const currentParticipants = currentEventData?.participants || [];
+
+    // Add user to participants if not already added
+    if (!currentParticipants.includes(user.id)) {
+      await updateDoc(eventRef, {
+        [incrementField]: increment(1),
+        participants: [...currentParticipants, user.id],
+        updatedAt: serverTimestamp(),
+      });
+    }
   } catch (error) {
-    console.error("Error updating payment status:", error);
+    console.error("Error approving registration:", error);
+    throw error;
+  }
+};
+
+export const rejectRegistration = async (registrationId: string) => {
+  try {
+    // Get registration details first
+    const regDoc = await getDoc(
+      doc(db, REGISTRATIONS_COLLECTION, registrationId)
+    );
+    if (!regDoc.exists()) {
+      throw new Error("등록 정보를 찾을 수 없습니다");
+    }
+
+    const registration = regDoc.data() as Registration;
+    const user = await getUserById(registration.userId);
+
+    if (!user) {
+      throw new Error("사용자 정보를 찾을 수 없습니다");
+    }
+
+    // Create a rejection record before deleting everything
+    await addDoc(collection(db, "rejections"), {
+      kakaoId: user.kakaoId,
+      eventId: registration.eventId,
+      userName: user.name,
+      rejectedAt: serverTimestamp(),
+      reason: "admin_rejected", // Could be expanded later
+    });
+
+    // Delete the registration document
+    await deleteDoc(doc(db, REGISTRATIONS_COLLECTION, registrationId));
+
+    // Delete questionnaire answers if they exist
+    const questionnaireQuery = query(
+      collection(db, "questionnaire_answers"),
+      where("userId", "==", registration.userId),
+      where("eventId", "==", registration.eventId),
+      limit(1)
+    );
+    const questionnaireSnapshot = await getDocs(questionnaireQuery);
+
+    if (!questionnaireSnapshot.empty) {
+      const questionnaireDoc = questionnaireSnapshot.docs[0];
+      await deleteDoc(doc(db, "questionnaire_answers", questionnaireDoc.id));
+    }
+
+    // Delete the user document from users collection
+    await deleteDoc(doc(db, USERS_COLLECTION, registration.userId));
+  } catch (error) {
+    console.error("Error rejecting registration:", error);
     throw error;
   }
 };
@@ -558,4 +621,144 @@ export const getAllQuestionnaireAnswers = async (eventId: string) => {
 export const verifyBarPassword = (inputPassword: string): boolean => {
   const correctPassword = process.env.NEXT_PUBLIC_BAR_PASSWORD;
   return inputPassword === correctPassword;
+};
+
+// Check if a user was rejected for current event
+export const checkUserRejection = async (kakaoId: string, eventId: string) => {
+  try {
+    const rejectionQuery = query(
+      collection(db, "rejections"),
+      where("kakaoId", "==", kakaoId),
+      where("eventId", "==", eventId),
+      limit(1)
+    );
+
+    const rejectionSnapshot = await getDocs(rejectionQuery);
+
+    if (!rejectionSnapshot.empty) {
+      const rejectionData = rejectionSnapshot.docs[0].data();
+      return {
+        wasRejected: true,
+        rejectedAt: rejectionData.rejectedAt,
+        userName: rejectionData.userName,
+        reason: rejectionData.reason,
+      };
+    }
+
+    return { wasRejected: false };
+  } catch (error) {
+    console.error("Error checking user rejection:", error);
+    return { wasRejected: false };
+  }
+};
+
+// Admin functions for managing registrations
+export const getPendingRegistrations = async (eventId: string) => {
+  try {
+    // First get all registrations for the event
+    const registrationsQuery = query(
+      collection(db, REGISTRATIONS_COLLECTION),
+      where("eventId", "==", eventId)
+    );
+
+    const querySnapshot = await getDocs(registrationsQuery);
+    const pendingRegistrations = [];
+
+    for (const regDoc of querySnapshot.docs) {
+      const registrationData = regDoc.data() as Registration;
+
+      // Filter for pending status in memory instead of in query
+      if (registrationData.approvalStatus === "pending") {
+        const user = await getUserById(registrationData.userId);
+        const event = await getDoc(
+          doc(db, EVENTS_COLLECTION, registrationData.eventId)
+        );
+
+        if (user && event.exists()) {
+          pendingRegistrations.push({
+            id: regDoc.id,
+            registrationId: regDoc.id,
+            user,
+            event: { id: event.id, ...event.data() } as Event,
+            submittedAt: registrationData.submittedAt,
+            approvalStatus: registrationData.approvalStatus,
+          });
+        }
+      }
+    }
+
+    // Sort by submittedAt in memory
+    pendingRegistrations.sort((a, b) => {
+      const getTimestamp = (timestamp: any) => {
+        if (!timestamp) return 0;
+        if (typeof timestamp.toMillis === 'function') return timestamp.toMillis();
+        if (typeof timestamp.getTime === 'function') return timestamp.getTime();
+        return 0;
+      };
+
+      const aTime = getTimestamp(a.submittedAt);
+      const bTime = getTimestamp(b.submittedAt);
+      return aTime - bTime; // Ascending order (earliest first)
+    });
+
+    return pendingRegistrations;
+  } catch (error) {
+    console.error("Error fetching pending registrations:", error);
+    return [];
+  }
+};
+
+export const getAllRegistrationsByStatus = async (
+  eventId: string,
+  status: "pending" | "approved" | "rejected"
+) => {
+  try {
+    // Get all registrations for the event first
+    const registrationsQuery = query(
+      collection(db, REGISTRATIONS_COLLECTION),
+      where("eventId", "==", eventId)
+    );
+
+    const querySnapshot = await getDocs(registrationsQuery);
+    const registrations = [];
+
+    for (const regDoc of querySnapshot.docs) {
+      const registrationData = regDoc.data() as Registration;
+
+      // Filter by status in memory
+      if (registrationData.approvalStatus === status) {
+        const user = await getUserById(registrationData.userId);
+
+        if (user) {
+          registrations.push({
+            id: regDoc.id,
+            registrationId: regDoc.id,
+            user,
+            submittedAt: registrationData.submittedAt,
+            approvalStatus: registrationData.approvalStatus,
+            paymentStatus: registrationData.paymentStatus,
+          });
+        }
+      }
+    }
+
+    // Sort by submittedAt in memory
+    registrations.sort((a, b) => {
+      const getTimestamp = (timestamp: any) => {
+        if (!timestamp) return 0;
+        if (typeof timestamp.toMillis === 'function') return timestamp.toMillis();
+        if (typeof timestamp.getTime === 'function') return timestamp.getTime();
+        return 0;
+      };
+
+      const aTime = getTimestamp(a.submittedAt);
+      const bTime = getTimestamp(b.submittedAt);
+      return status === "pending" ? aTime - bTime : bTime - aTime; // Pending: asc, others: desc
+    });
+
+    return registrations;
+  } catch (error) {
+    console.error("Error fetching registrations by status:", error);
+    return [];
+  }
 };

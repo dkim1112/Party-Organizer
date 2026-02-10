@@ -54,15 +54,25 @@ export default function DashboardPage() {
   const [currentEventId, setCurrentEventId] = useState<string | null>(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
+  const router = useRouter();
+
   useEffect(() => {
     const uniqueId = Math.random().toString(36).substr(2, 9);
+
+    // Route protection: Check if user has completed payment/approval
+    const paymentResultData = sessionStorage.getItem("paymentResult");
+    const pendingUserData = sessionStorage.getItem("pendingUser");
+
+    if (!paymentResultData) {
+      // No payment result data, redirect to home
+      router.push("/");
+      return;
+    }
 
     // Load user data and event data
     const loadData = async () => {
       try {
         // Load user data from session storage
-        const paymentResultData = sessionStorage.getItem("paymentResult");
-        const pendingUserData = sessionStorage.getItem("pendingUser");
         console.log(
           "- paymentResult:",
           paymentResultData ? "EXISTS" : "MISSING"
@@ -163,7 +173,6 @@ export default function DashboardPage() {
 
   const [activeTab, setActiveTab] = useState<"event" | "profile">("event");
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
 
   const handleCancelRegistration = async () => {
     if (

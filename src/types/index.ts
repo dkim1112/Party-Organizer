@@ -39,7 +39,8 @@ export interface Registration {
   userId: string;
   eventId: string;
   paymentStatus: "pending" | "completed" | "failed";
-  paymentId?: string; // 토스페이먼츠 결제 ID
+  approvalStatus: "pending" | "approved" | "rejected"; // 관리자 승인 상태
+  submittedAt: Date; // 신청 제출 시간 (대기열 순서용)
   questionnaireAnswers: QuestionnaireAnswers;
   registeredAt: Date;
   updatedAt: Date;
@@ -59,12 +60,11 @@ export interface Question {
   order: number;
 }
 
-export interface PaymentData {
-  amount: number;
-  orderId: string;
-  orderName: string;
-  customerName: string;
-  customerPhone: string;
+export interface BankTransferInfo {
+  bankName: string; // 은행명
+  accountNumber: string; // 계좌번호
+  accountHolder: string; // 예금주
+  amount: number; // 입금할 금액
 }
 
 export interface EventStatus {
@@ -79,4 +79,13 @@ export interface EventStatus {
 export interface MenuItem {
   id: string;
   name: string;
+}
+
+export interface PendingRegistration {
+  id: string;
+  registrationId: string;
+  user: User;
+  event: Event;
+  submittedAt: Date;
+  approvalStatus: "pending" | "approved" | "rejected";
 }

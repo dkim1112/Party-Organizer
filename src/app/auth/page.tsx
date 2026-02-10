@@ -44,10 +44,19 @@ function AuthPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Handle Kakao callback
+  // Handle Kakao callback and route protection
   useEffect(() => {
     const code = searchParams.get("code");
     const error = searchParams.get("error");
+
+    // Route protection: Check if user should be here
+    const userIntent = sessionStorage.getItem("userIntent");
+
+    if (!code && !userIntent) {
+      // No Kakao callback and no user intent, redirect to home
+      router.push("/");
+      return;
+    }
 
     if (error) {
       setError("카카오 로그인에 실패했습니다. 다시 시도해주세요.");
@@ -116,34 +125,129 @@ function AuthPageContent() {
       }
 
       // Check if user already exists
-      const { getUserByKakaoId } = await import("@/lib/firestore");
+      const {
+        getUserByKakaoId,
+        checkUserRejection,
+        getCurrentEvent,
+        getRegistrationByUser,
+      } = await import("@/lib/firestore");
+      const currentEvent = await getCurrentEvent();
       const existingUser = await getUserByKakaoId(data.user.kakaoId);
 
       if (existingUser) {
-        setError(`${existingUser.name}님, 이미 가입된 계정이에요! 잠시만요..`);
+        // Check user's registration status for current event
+        if (currentEvent) {
+          const registration = await getRegistrationByUser(
+            existingUser.id,
+            currentEvent.id
+          );
 
-        // Store existing user data in sessionStorage for dashboard
-        sessionStorage.setItem(
-          "paymentResult",
-          JSON.stringify({
-            success: true,
-            paymentId: `existing_user_${Date.now()}`,
-            amount: 0, // Existing user, no new payment
-            userData: {
-              kakaoId: existingUser.kakaoId,
-              name: existingUser.name,
-              phoneNumber: existingUser.phoneNumber,
-              gender: existingUser.gender,
-              age: existingUser.age.toString(),
-            },
-          })
-        );
+          if (registration) {
+            // Check approval status
+            if (registration.approvalStatus === "approved") {
+              setError(
+                `${existingUser.name}님, 환영합니다! 대시보드로 이동합니다..`
+              );
 
-        // Redirect to dashboard after 2 seconds
+              // Store user data for dashboard
+              sessionStorage.setItem(
+                "paymentResult",
+                JSON.stringify({
+                  success: true,
+                  paymentId: `approved_user_${Date.now()}`,
+                  amount: currentEvent.price,
+                  userData: {
+                    kakaoId: existingUser.kakaoId,
+                    name: existingUser.name,
+                    phoneNumber: existingUser.phoneNumber,
+                    gender: existingUser.gender,
+                    age: existingUser.age.toString(),
+                  },
+                })
+              );
+
+              setTimeout(() => {
+                router.push("/dashboard");
+              }, 2000);
+              return;
+            } else if (registration.approvalStatus === "pending") {
+              setError(
+                `${existingUser.name}님, 승인 대기 중입니다. 대기 페이지로 이동합니다..`
+              );
+
+              // Store user data for waiting page
+              sessionStorage.setItem(
+                "pendingUser",
+                JSON.stringify({
+                  kakaoId: existingUser.kakaoId,
+                  name: existingUser.name,
+                  phoneNumber: existingUser.phoneNumber,
+                  gender: existingUser.gender,
+                  age: existingUser.age.toString(),
+                })
+              );
+
+              setTimeout(() => {
+                router.push("/waiting");
+              }, 2000);
+              return;
+            } else if (registration.approvalStatus === "rejected") {
+              setError(
+                `${existingUser.name}님, 안타깝게도 신청이 거부되었습니다. 자세한 사항은 DM으로 문의해주세요.`
+              );
+              return;
+            }
+          } else {
+            // User exists but hasn't registered for current event
+            setError(
+              `${existingUser.name}님, 현재 이벤트에 아직 신청하지 않으셨네요. 신청 페이지로 이동합니다..`
+            );
+
+            // Store existing user data and redirect to status page
+            sessionStorage.setItem(
+              "existingUser",
+              JSON.stringify({
+                kakaoId: existingUser.kakaoId,
+                name: existingUser.name,
+                phoneNumber: existingUser.phoneNumber,
+                gender: existingUser.gender,
+                age: existingUser.age.toString(),
+              })
+            );
+
+            setTimeout(() => {
+              router.push("/status");
+            }, 2000);
+            return;
+          }
+        }
+
+        // Fallback for existing users
+        setError(`${existingUser.name}님, 환영합니다! 상태를 확인하는 중...`);
         setTimeout(() => {
           router.push("/dashboard");
         }, 2000);
         return;
+      }
+
+      // Check if this user was previously rejected for current event
+      if (currentEvent) {
+        const rejectionStatus = await checkUserRejection(
+          data.user.kakaoId,
+          currentEvent.id
+        );
+        if (rejectionStatus.wasRejected) {
+          setError(
+            "이전 신청 거부 내역이 조회 되었습니다.\n\n다시 신청하실 수 있습니다. 계속하시겠습니까?"
+          );
+
+          // // Allow them to continue after a few seconds, or they can click to continue
+          // setTimeout(() => {
+          //   setError(""); // Clear the rejection message and let them proceed
+          // }, 100000);
+
+          // Still allow them to proceed with new registration
+        }
       }
 
       // Update user data with Kakao info for new users
@@ -191,7 +295,7 @@ function AuthPageContent() {
     setError("");
 
     try {
-      // Store user data in sessionStorage for payment page
+      // Store user data in sessionStorage for bank transfer page
       sessionStorage.setItem(
         "pendingUser",
         JSON.stringify({
@@ -203,8 +307,8 @@ function AuthPageContent() {
         })
       );
 
-      // Redirect to payment page
-      router.push("/payment");
+      // Redirect to bank transfer page
+      router.push("/bank-transfer");
     } catch (err: any) {
       setError(err.message || "회원가입에 실패했습니다. 다시 시도해주세요.");
     } finally {

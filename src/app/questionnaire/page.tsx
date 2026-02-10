@@ -36,13 +36,29 @@ export default function QuestionnairePage() {
 
   useEffect(() => {
     const initializePage = async () => {
+      // Route protection: Check if user has proper access
+      const urlParams = new URLSearchParams(window.location.search);
+      const isViewMode = urlParams.get("view") === "true";
+
+      if (!isViewMode) {
+        // Normal questionnaire access - check for payment/approval data
+        const paymentResultData = sessionStorage.getItem("paymentResult");
+        const pendingUserData = sessionStorage.getItem("pendingUser");
+
+        if (!paymentResultData && !pendingUserData) {
+          // No valid session data, redirect to home
+          router.push("/");
+          return;
+        }
+      }
+
       checkViewMode();
       await new Promise((resolve) => setTimeout(resolve, 100));
       await loadQuestions();
     };
 
     initializePage();
-  }, []);
+  }, [router]);
 
   const checkViewMode = () => {
     const urlParams = new URLSearchParams(window.location.search);

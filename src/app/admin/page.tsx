@@ -8,10 +8,21 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createMenuItem, getMenuItems, deleteMenuItem } from "@/lib/firestore";
 import { getQuestions, deleteQuestion, createQuestion } from "@/lib/firestore";
+import {
+  getCurrentEvent,
+  getPendingRegistrations,
+  approveRegistration,
+  rejectRegistration,
+  getAllRegistrationsByStatus,
+  getAllQuestionnaireAnswers,
+} from "@/lib/firestore";
 import { MenuItem, Question } from "@/types";
+import { generateFullReport } from "@/lib/pdf-generator";
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<"questions" | "menu">("questions");
+  const [activeTab, setActiveTab] = useState<
+    "questions" | "menu" | "approvals" | "reports"
+  >("approvals");
 
   // Questions state
   const [questionsLoading, setQuestionsLoading] = useState(false);
@@ -29,6 +40,24 @@ export default function AdminPage() {
   const [menuResult, setMenuResult] = useState<string>("");
   const [newItemName, setNewItemName] = useState("");
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+
+  // Approvals state
+  const [approvalsLoading, setApprovalsLoading] = useState(false);
+  const [approvalsResult, setApprovalsResult] = useState<string>("");
+  const [pendingRegistrations, setPendingRegistrations] = useState<any[]>([]);
+  const [currentEventId, setCurrentEventId] = useState<string | null>(null);
+  const [eventStats, setEventStats] = useState<{
+    approvedMale: number;
+    approvedFemale: number;
+    pendingMale: number;
+    pendingFemale: number;
+    maxMale: number;
+    maxFemale: number;
+  } | null>(null);
+
+  // Reports state
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsResult, setReportsResult] = useState<string>("");
 
   // Questions functions
   const loadQuestions = async () => {
@@ -156,6 +185,176 @@ export default function AdminPage() {
     }
   };
 
+  // Approval functions
+  const loadPendingRegistrations = async () => {
+    try {
+      const currentEvent = await getCurrentEvent();
+      if (!currentEvent) {
+        setApprovalsResult("❌ 현재 활성화된 이벤트가 없습니다.");
+        return;
+      }
+
+      setCurrentEventId(currentEvent.id);
+      const pending = await getPendingRegistrations(currentEvent.id);
+      setPendingRegistrations(pending);
+
+      // Calculate event statistics
+      await calculateEventStats(currentEvent.id, currentEvent);
+    } catch (error: any) {
+      console.error("Failed to load pending registrations:", error);
+      setApprovalsResult(
+        `❌ Error loading pending registrations: ${error.message}`
+      );
+    }
+  };
+
+  const calculateEventStats = async (eventId: string, event: any) => {
+    try {
+      const { getAllRegistrationsByStatus } = await import("@/lib/firestore");
+
+      // Get approved and pending registrations
+      const approvedRegistrations = await getAllRegistrationsByStatus(
+        eventId,
+        "approved"
+      );
+      const pendingRegistrations = await getAllRegistrationsByStatus(
+        eventId,
+        "pending"
+      );
+
+      // Count by gender
+      let approvedMale = 0,
+        approvedFemale = 0;
+      let pendingMale = 0,
+        pendingFemale = 0;
+
+      approvedRegistrations.forEach((reg: any) => {
+        if (reg.user.gender === "male") approvedMale++;
+        else if (reg.user.gender === "female") approvedFemale++;
+      });
+
+      pendingRegistrations.forEach((reg: any) => {
+        if (reg.user.gender === "male") pendingMale++;
+        else if (reg.user.gender === "female") pendingFemale++;
+      });
+
+      setEventStats({
+        approvedMale,
+        approvedFemale,
+        pendingMale,
+        pendingFemale,
+        maxMale: event.maxMaleSlots || 5,
+        maxFemale: event.maxFemaleSlots || 5,
+      });
+    } catch (error) {
+      console.error("Error calculating event stats:", error);
+    }
+  };
+
+  const handleLoadApprovals = async () => {
+    setApprovalsLoading(true);
+    setApprovalsResult("");
+    await loadPendingRegistrations();
+    setApprovalsLoading(false);
+  };
+
+  const handleApproveRegistration = async (
+    registrationId: string,
+    userName: string
+  ) => {
+    if (!confirm(`${userName}님의 신청을 승인하시겠습니까?`)) {
+      return;
+    }
+
+    setApprovalsLoading(true);
+    setApprovalsResult("");
+
+    try {
+      await approveRegistration(registrationId);
+      setApprovalsResult(`✅ ${userName}님의 신청이 승인되었습니다!`);
+      await loadPendingRegistrations(); // Refresh the list and stats
+    } catch (error: any) {
+      setApprovalsResult(`❌ Error approving registration: ${error.message}`);
+    } finally {
+      setApprovalsLoading(false);
+    }
+  };
+
+  const handleRejectRegistration = async (
+    registrationId: string,
+    userName: string
+  ) => {
+    if (!confirm(`${userName}님의 신청을 거부하시겠습니까?`)) {
+      return;
+    }
+
+    setApprovalsLoading(true);
+    setApprovalsResult("");
+
+    try {
+      await rejectRegistration(registrationId);
+      setApprovalsResult(`❌ ${userName}님의 신청이 거부되었습니다.`);
+      await loadPendingRegistrations(); // Refresh the list and stats
+    } catch (error: any) {
+      setApprovalsResult(`❌ Error rejecting registration: ${error.message}`);
+    } finally {
+      setApprovalsLoading(false);
+    }
+  };
+
+  // Reports function
+  const generateReport = async () => {
+    if (!currentEventId) {
+      setReportsResult("현재 이벤트를 먼저 불러와주세요!");
+      return;
+    }
+
+    setReportsLoading(true);
+    setReportsResult("");
+
+    try {
+      // Get current event
+      const currentEvent = await getCurrentEvent();
+      if (!currentEvent) {
+        throw new Error("현재 이벤트를 찾을 수 없습니다.");
+      }
+
+      // Get approved participants
+      const approvedRegistrations = await getAllRegistrationsByStatus(
+        currentEventId,
+        "approved"
+      );
+
+      // Get all questionnaire answers for the event
+      const allAnswers = await getAllQuestionnaireAnswers(currentEventId);
+
+      // Combine participant data with their answers
+      const participantsWithAnswers = approvedRegistrations.map((reg) => {
+        const userAnswers = allAnswers.find(
+          (answer) => answer.userId === reg.user.id
+        );
+        return {
+          user: reg.user,
+          answers: userAnswers?.answers || [],
+        };
+      });
+
+      await generateFullReport(
+        participantsWithAnswers,
+        currentEvent.title,
+        currentEvent.date.toLocaleDateString?.() ||
+          currentEvent.date.toString(),
+        eventStats || undefined
+      );
+
+      setReportsResult("✅ 전체 리포트가 성공적으로 생성되었습니다!");
+    } catch (error: any) {
+      setReportsResult(`리포트 생성 실패: ${error.message}`);
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -163,7 +362,7 @@ export default function AdminPage() {
           <CardHeader>
             <CardTitle>관리자 페이지</CardTitle>
             <p className="text-sm text-gray-600">
-              질문지와 메뉴를 관리할 수 있습니다.
+              참석자, 질문지, 그리고 메뉴를 관리할 수 있습니다.
             </p>
             <p className="text-sm text-red-500">
               주의: 손님들한테 링크가 나간 후엔 정보 수정 금지!
@@ -172,6 +371,16 @@ export default function AdminPage() {
           <CardContent>
             {/* Tabs */}
             <div className="flex space-x-1 rounded-lg bg-gray-200 p-1 mb-6">
+              <button
+                onClick={() => setActiveTab("approvals")}
+                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "approvals"
+                    ? "bg-white text-purple-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                참석자 관리
+              </button>
               <button
                 onClick={() => setActiveTab("questions")}
                 className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
@@ -192,7 +401,256 @@ export default function AdminPage() {
               >
                 메뉴 관리
               </button>
+              <button
+                onClick={() => setActiveTab("reports")}
+                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "reports"
+                    ? "bg-white text-purple-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                PDF 리포트
+              </button>
             </div>
+
+            {/* Approvals Tab */}
+            {activeTab === "approvals" && (
+              <div className="space-y-6">
+                {/* Load Approvals */}
+                <div className="space-y-3">
+                  <h3 className="font-medium">대기 중인 신청 불러오기</h3>
+                  <Button
+                    onClick={handleLoadApprovals}
+                    disabled={approvalsLoading}
+                    className="w-full bg-black text-white hover:bg-gray-800"
+                  >
+                    {approvalsLoading
+                      ? "불러오는 중..."
+                      : "대기 중인 신청 불러오기"}
+                  </Button>
+                  {approvalsResult && (
+                    <div className="p-3 bg-gray-100 rounded-md">
+                      <p className="text-sm font-mono whitespace-pre-wrap">
+                        {approvalsResult}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Event Statistics */}
+                {eventStats && (
+                  <Card className="border-blue-200 bg-blue-50">
+                    <CardHeader>
+                      <CardTitle className="text-blue-800 text-lg">
+                        📊 참가자 현황
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Male Stats */}
+                        <div className="bg-white p-4 rounded-lg">
+                          <h4 className="font-semibold text-gray-800 mb-2">
+                            👨 남성
+                          </h4>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span>승인됨:</span>
+                              <span className="font-mono font-bold text-green-600">
+                                {eventStats.approvedMale}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>대기중:</span>
+                              <span className="font-mono font-bold text-yellow-600">
+                                {eventStats.pendingMale}
+                              </span>
+                            </div>
+                            <div className="flex justify-between border-t pt-2">
+                              <span>총계:</span>
+                              <span className="font-mono font-bold">
+                                {eventStats.approvedMale +
+                                  eventStats.pendingMale}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>한도:</span>
+                              <span className="font-mono font-bold text-blue-600">
+                                {eventStats.maxMale}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>여유:</span>
+                              <span
+                                className={`font-mono font-bold ${
+                                  eventStats.maxMale -
+                                    eventStats.approvedMale -
+                                    eventStats.pendingMale <=
+                                  0
+                                    ? "text-red-600"
+                                    : "text-green-600"
+                                }`}
+                              >
+                                {eventStats.maxMale -
+                                  eventStats.approvedMale -
+                                  eventStats.pendingMale}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Female Stats */}
+                        <div className="bg-white p-4 rounded-lg">
+                          <h4 className="font-semibold text-gray-800 mb-2">
+                            👩 여성
+                          </h4>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span>승인됨:</span>
+                              <span className="font-mono font-bold text-green-600">
+                                {eventStats.approvedFemale}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>대기중:</span>
+                              <span className="font-mono font-bold text-yellow-600">
+                                {eventStats.pendingFemale}
+                              </span>
+                            </div>
+                            <div className="flex justify-between border-t pt-2">
+                              <span>총계:</span>
+                              <span className="font-mono font-bold">
+                                {eventStats.approvedFemale +
+                                  eventStats.pendingFemale}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>한도:</span>
+                              <span className="font-mono font-bold text-blue-600">
+                                {eventStats.maxFemale}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>여유:</span>
+                              <span
+                                className={`font-mono font-bold ${
+                                  eventStats.maxFemale -
+                                    eventStats.approvedFemale -
+                                    eventStats.pendingFemale <=
+                                  0
+                                    ? "text-red-600"
+                                    : "text-green-600"
+                                }`}
+                              >
+                                {eventStats.maxFemale -
+                                  eventStats.approvedFemale -
+                                  eventStats.pendingFemale}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Warning Messages */}
+                      {(eventStats.approvedMale + eventStats.pendingMale >
+                        eventStats.maxMale ||
+                        eventStats.approvedFemale + eventStats.pendingFemale >
+                          eventStats.maxFemale) && (
+                        <div className="bg-red-100 border border-red-200 rounded-lg p-3">
+                          <p className="text-red-800 text-sm font-medium">
+                            ⚠️ 경고: 일부 성별에서 신청자가 한도를 초과했습니다!
+                          </p>
+                          <p className="text-red-600 text-xs mt-1">
+                            승인 시 한도 초과에 주의하세요.
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Pending Registrations List */}
+                {pendingRegistrations.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="font-medium">
+                      승인 대기 목록 ({pendingRegistrations.length}건)
+                    </h3>
+                    <div className="space-y-3">
+                      {pendingRegistrations.map(
+                        (registration: any, index: number) => (
+                          <Card
+                            key={registration.id}
+                            className="border-l-4 border-l-yellow-400"
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <CardTitle className="text-lg">
+                                    {registration.user.name}
+                                    <span className="ml-2 text-sm font-normal text-gray-500">
+                                      (
+                                      {registration.user.gender === "male"
+                                        ? "남성"
+                                        : "여성"}
+                                      , {registration.user.age}세)
+                                    </span>
+                                  </CardTitle>
+                                  <div className="text-sm text-gray-600 space-y-1">
+                                    <p>{registration.user.phoneNumber}</p>
+                                    <p>
+                                      {registration.submittedAt
+                                        ?.toDate?.()
+                                        ?.toLocaleString("ko-KR") ||
+                                        "정보 없음"}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      대기 순서: {index + 1}번째
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    onClick={() =>
+                                      handleApproveRegistration(
+                                        registration.registrationId,
+                                        registration.user.name
+                                      )
+                                    }
+                                    disabled={approvalsLoading}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    size="sm"
+                                  >
+                                    승인
+                                  </Button>
+                                  <Button
+                                    onClick={() =>
+                                      handleRejectRegistration(
+                                        registration.registrationId,
+                                        registration.user.name
+                                      )
+                                    }
+                                    disabled={approvalsLoading}
+                                    className="bg-red-600 hover:bg-red-700 text-white"
+                                    size="sm"
+                                  >
+                                    거부
+                                  </Button>
+                                </div>
+                              </div>
+                            </CardHeader>
+                          </Card>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {pendingRegistrations.length === 0 && currentEventId && (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-lg">모든 신청이 처리되었습니다!</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Questions Tab */}
             {activeTab === "questions" && (
@@ -234,6 +692,7 @@ export default function AdminPage() {
                           }))
                         }
                         rows={2}
+                        className="bg-white"
                       />
                     </div>
 
@@ -256,8 +715,7 @@ export default function AdminPage() {
                     <Button
                       onClick={handleCreateQuestion}
                       disabled={questionsLoading || !newQuestion.title.trim()}
-                      variant="outline"
-                      className="w-full"
+                      className="w-full bg-black text-white hover:bg-gray-800"
                     >
                       {questionsLoading ? "저장 중..." : "추가하기"}
                     </Button>
@@ -270,8 +728,7 @@ export default function AdminPage() {
                   <Button
                     onClick={handleLoadQuestions}
                     disabled={questionsLoading}
-                    variant="outline"
-                    className="w-full"
+                    className="w-full bg-black text-white hover:bg-gray-800"
                   >
                     {questionsLoading ? "조회 중..." : "조회하기"}
                   </Button>
@@ -315,9 +772,8 @@ export default function AdminPage() {
                                 <Button
                                   onClick={() => handleDeleteQuestion(question)}
                                   disabled={questionsLoading}
-                                  variant="destructive"
+                                  className="ml-4 bg-black text-white hover:bg-gray-800"
                                   size="sm"
-                                  className="ml-4"
                                 >
                                   삭제
                                 </Button>
@@ -367,8 +823,7 @@ export default function AdminPage() {
                     <Button
                       onClick={handleAddMenuItem}
                       disabled={menuLoading || !newItemName.trim()}
-                      variant="outline"
-                      className="w-full"
+                      className="w-full bg-black text-white hover:bg-gray-800"
                     >
                       {menuLoading ? "추가 중..." : "추가하기"}
                     </Button>
@@ -381,8 +836,7 @@ export default function AdminPage() {
                   <Button
                     onClick={handleLoadMenuItems}
                     disabled={menuLoading}
-                    variant="outline"
-                    className="w-full"
+                    className="w-full bg-black text-white hover:bg-gray-800"
                   >
                     {menuLoading ? "Loading..." : "조회하기"}
                   </Button>
@@ -400,7 +854,7 @@ export default function AdminPage() {
                           <Button
                             onClick={() => handleDeleteMenuItem(item)}
                             disabled={menuLoading}
-                            variant="destructive"
+                            className="bg-black text-white hover:bg-gray-800"
                             size="sm"
                           >
                             삭제
@@ -421,6 +875,59 @@ export default function AdminPage() {
                     }`}
                   >
                     {menuResult}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Reports Tab */}
+            {activeTab === "reports" && (
+              <div className="space-y-6">
+                {/* Reports Header */}
+                <div className="space-y-3">
+                  <h3 className="font-medium">PDF 리포트 생성</h3>
+                  <p className="text-sm text-gray-600">
+                    참가자 정보 및 답변을 PDF로 다운로드할 수 있습니다.
+                  </p>
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-800">
+                      💡 리포트 생성 전, '참석자 관리' 탭에서 현재 이벤트를 먼저
+                      불러와주세요.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Report Generation */}
+                <Card className="border-green-200">
+                  <CardHeader>
+                    <CardTitle className="text-green-800 text-lg">
+                      전체 리포트
+                    </CardTitle>
+                    <p className="text-sm text-gray-600">
+                      참가자 정보, 질문지 답변, 통계 포함
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      onClick={generateReport}
+                      disabled={reportsLoading || !currentEventId}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      {reportsLoading ? "생성 중..." : "전체 리포트 다운로드"}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Result */}
+                {reportsResult && (
+                  <div
+                    className={`p-4 rounded-md text-sm ${
+                      reportsResult.startsWith("✅")
+                        ? "bg-green-50 text-green-700 border border-green-200"
+                        : "bg-red-50 text-red-700 border border-red-200"
+                    }`}
+                  >
+                    {reportsResult}
                   </div>
                 )}
               </div>

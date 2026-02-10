@@ -6,7 +6,7 @@ A private party organization and management platform built exclusively for [연�
 
 ## About
 
-Kyareureuk Party is a private party that the Yeonrim bar hosts to their guests, helping people to find their own loves. It is an invitation-only, designed for organizing exclusive events at [연림] bar. The platform ensures that only verified and trusted guests can participate in their event, maintaining the intimate and exclusive atmosphere that makes [연림] special.
+Kyareureuk Party is a private party that the Yeonrim bar hosts to their guests, helping people to find their own loves. It is an invitation-only platform designed for organizing exclusive events at [연림] bar. The platform ensures that only verified and trusted guests can participate in their event, maintaining the intimate and exclusive atmosphere that makes [연림] special.
 
 ## It All Started With...
 
@@ -18,27 +18,36 @@ The project began with hand-drawn sketches and brainstorming sessions, mapping o
 
 ### Event Management
 
-- Interactive questionnaire system
-- Participant status tracking
-- Administrative dashboard for organizers
+- Interactive questionnaire system for participant matching
+- Real-time participant status tracking with gender-based quotas
+- Administrative dashboard with comprehensive participant statistics
+- Manual approval workflow with admin oversight
 
-### Payment Integration (TBD)
+### Payment System
 
-- Integrated payment processing via TossPayments
-- Secure transaction handling
-- Payment status tracking
+- **Bank Transfer Payment**: Secure manual bank transfer system with admin verification
+- **Note**: Initially attempted TossPayments integration, but transitioned to manual bank transfer for better control and flexibility
+- Payment status tracking and approval management
+- Comprehensive refund policy with detailed terms
 
 ### Social Authentication
 
-- Kakao OAuth integration
-- Streamlined user onboarding
-- Social login capabilities
+- Kakao OAuth integration for seamless login
+- Streamlined user onboarding with profile management
+- Social login capabilities with user state tracking
+
+### Route Protection & Security
+
+- Comprehensive URL protection preventing manual navigation
+- Session-based state management with proper flow enforcement
+- User intent tracking and validation throughout the application
+- Secure admin access controls
 
 ### Responsive Design
 
-- Mobile-first approach
-- Modern UI with Tailwind CSS
-- Radix UI components for accessibility
+- Mobile-first approach optimized for smartphone usage
+- Modern UI with Tailwind CSS and consistent styling
+- Radix UI components for accessibility and usability
 
 ## Tech Stack
 
@@ -52,19 +61,15 @@ The project began with hand-drawn sketches and brainstorming sessions, mapping o
 
 ### Backend & Database
 
-- **Firebase** - Authentication and Firestore database
-- **Next.js API Routes** - Serverless backend functions
+- **Firebase** - Authentication and Firestore database with real-time updates
+- **Next.js API Routes** - Serverless backend functions for authentication and data processing
+- **Firestore Security** - Memory-based filtering to handle complex queries without composite indexes
 
 ### Payment & Authentication
 
-- **TossPayments SDK** - Payment processing
-- **Kakao OAuth** - Social authentication
-
-### Development Tools
-
-- **ESLint** - Code linting
-- **React Hook Form + Zod** - Form validation
-- **Lucide React** - Icon library
+- **Bank Transfer System** - Manual payment processing with admin verification
+- **Kakao OAuth** - Social authentication with user state management
+- **Session Management** - Secure session storage with route protection
 
 ### Deployment
 
@@ -76,9 +81,9 @@ The project began with hand-drawn sketches and brainstorming sessions, mapping o
 
 - Node.js 18+
 - npm or yarn
-- Firebase project setup
-- TossPayments account (for payment features)
-- Kakao Developers account (for OAuth)
+- Firebase project setup with Firestore database
+- Kakao Developers account (for OAuth integration)
+- Bank account for manual payment processing
 
 ### Installation
 
@@ -108,12 +113,9 @@ The project began with hand-drawn sketches and brainstorming sessions, mapping o
    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 
    # Kakao OAuth
+   NEXT_PUBLIC_KAKAO_JS_KEY=your_kakao_javascript_key
    KAKAO_CLIENT_ID=your_kakao_client_id
    KAKAO_CLIENT_SECRET=your_kakao_client_secret
-
-   # TossPayments
-   NEXT_PUBLIC_TOSS_CLIENT_KEY=your_toss_client_key
-   TOSS_SECRET_KEY=your_toss_secret_key
 
    # Bar Password (for access control)
    BAR_PASSWORD=your_secure_password
@@ -134,23 +136,23 @@ The project began with hand-drawn sketches and brainstorming sessions, mapping o
 kyareureuk-party/
 ├── src/
 │   ├── app/                    # Next.js App Router pages
-│   │   ├── admin/             # Admin dashboard
+│   │   ├── admin/             # Admin dashboard with approval management
 │   │   ├── api/               # API routes
-│   │   │   └── auth/          # Authentication endpoints
-│   │   ├── auth/              # Authentication pages
-│   │   ├── dashboard/         # User dashboard
-│   │   ├── payment/           # Payment processing
-│   │   ├── questionnaire/     # Event questionnaire
-│   │   ├── status/            # Status tracking
-│   │   └── page.tsx           # Home page
+│   │   │   └── auth/          # Authentication endpoints (Kakao OAuth)
+│   │   ├── auth/              # Authentication flow with user state handling
+│   │   ├── bank-transfer/     # Bank transfer payment processing
+│   │   ├── dashboard/         # User dashboard with event info
+│   │   ├── questionnaire/     # Event questionnaire system
+│   │   ├── status/            # Real-time participant status tracking
+│   │   ├── waiting/           # Approval waiting page with polling
+│   │   └── page.tsx           # Home page with password protection
 │   ├── components/            # React components
-│   │   ├── common/            # Shared components
-│   │   ├── layout/            # Layout components
-│   │   └── ui/                # UI primitives
+│   │   ├── common/            # Shared components (LoadingSpinner, etc.)
+│   │   ├── layout/            # Layout components (AppLayout)
+│   │   └── ui/                # UI primitives (Radix-based components)
 │   ├── lib/                   # Utility libraries
 │   │   ├── firebase.ts        # Firebase configuration
-│   │   ├── firestore.ts       # Database operations
-│   │   ├── payment.ts         # Payment utilities
+│   │   ├── firestore.ts       # Database operations with approval workflow
 │   │   └── utils.ts           # General utilities
 │   └── types/                 # TypeScript type definitions
 ├── public/                    # Static assets

@@ -26,8 +26,17 @@ export default function StatusPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // Route protection: Check if user should be here
+    const userIntent = sessionStorage.getItem("userIntent");
+
+    if (userIntent !== "signup") {
+      // User didn't come through proper signup flow, redirect to home
+      router.push("/");
+      return;
+    }
+
     fetchEventStatus();
-  }, []);
+  }, [router]);
 
   const fetchEventStatus = async () => {
     try {
@@ -320,7 +329,7 @@ export default function StatusPage() {
                   className="w-full bg-green-600 hover:bg-green-700"
                   size="lg"
                 >
-                  참가 신청 ✨
+                  참가 신청
                 </Button>
               </div>
             </CardContent>
