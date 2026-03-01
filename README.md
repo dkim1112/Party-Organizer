@@ -4,6 +4,8 @@
 
 A private party organization and management platform built exclusively for [연림] (Yeonrim) bar.
 
+For dev tracking purposes: https://docs.google.com/document/d/1-A3cYLwAaMKF5r-6nzqIWbeLeMiWJ34OMk7jhHDwwDs/edit?hl=ko&tab=t.jpxe5jreink6
+
 ## About
 
 Kyareureuk Party is a private party that the Yeonrim bar hosts to their guests, helping people to find their own loves. It is an invitation-only platform designed for organizing exclusive events at [연림] bar. The platform ensures that only verified and trusted guests can participate in their event, maintaining the intimate and exclusive atmosphere that makes [연림] special.
